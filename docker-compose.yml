@@ -1,0 +1,22 @@
+# Môi trường dev local. Hiện chỉ có PostgreSQL.
+# TV5 (Hiếu) sẽ bổ sung service backend, frontend khi có Dockerfile.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: banking-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-bank}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-bank_dev_password}
+      POSTGRES_DB: ${DB_NAME:-banking}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-bank} -d ${DB_NAME:-banking}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
