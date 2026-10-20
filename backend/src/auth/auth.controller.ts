@@ -8,7 +8,12 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service.js';
-import { LoginDto, LoginResponseDto, RegisterDto } from './dto/auth.dto.js';
+import {
+  LoginDto,
+  LoginResponseDto,
+  RegisterDto,
+  RegisterResponseDto,
+} from './dto/auth.dto.js';
 
 /** Phụ trách: TV2 Châu Anh */
 @ApiTags('auth')
@@ -20,12 +25,10 @@ export class AuthController {
   @ApiOperation({
     summary: 'Đăng ký khách hàng, tự tạo 1 tài khoản VND số dư 0',
   })
-  @ApiResponse({ status: 201, description: 'Tạo thành công' })
+  @ApiResponse({ status: 201, type: RegisterResponseDto })
   @ApiResponse({ status: 409, description: 'EMAIL_ALREADY_EXISTS' })
-  register(@Body() dto: RegisterDto) {
-    // TODO(TV2): hash bcrypt, tạo user + account trong 1 DB transaction, không trả passwordHash
-    void dto;
-    throw new NotImplementedException();
+  register(@Body() dto: RegisterDto): Promise<RegisterResponseDto> {
+    return this.authService.register(dto);
   }
 
   @Post('login')
