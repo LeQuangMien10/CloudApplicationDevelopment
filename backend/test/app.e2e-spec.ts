@@ -78,6 +78,89 @@ describe('Khung API (e2e)', () => {
     expect(res.body.code).toBe('UNAUTHORIZED');
   });
 
+  it('admin lấy danh sách user có phân trang, không lộ passwordHash', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email: 'admin@bank.local', password: 'Admin@123' })
+      .expect(200);
+    const res = await request(app.getHttpServer())
+      .get('/api/admin/users?page=1&limit=2')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .expect(200);
+    expect(res.body.items).toHaveLength(2);
+    expect(typeof res.body.total).toBe('number');
+    expect(JSON.stringify(res.body)).not.toContain('passwordHash');
+  });
+
+  it('customer bị chặn 403 khi gọi API admin', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email: 'an@example.com', password: 'Password@123' })
+      .expect(200);
+    const res = await request(app.getHttpServer())
+      .get('/api/admin/users')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .expect(403);
+    expect(res.body.code).toBe('FORBIDDEN');
+  });
+
+  it('admin khóa rồi mở lại user; user bị khóa không đăng nhập được', async () => {
+    const adminLogin = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email: 'admin@bank.local', password: 'Admin@123' })
+      .expect(200);
+    const adminToken = adminLogin.body.accessToken;
+
+    const reg = await request(app.getHttpServer())
+      .post('/api/auth/register')
+      .send({
+        fullName: 'Lock Me',
+        email: `lock-${Date.now()}@example.com`,
+        password: 'Password@123',
+      })
+      .expect(201);
+    const userLogin = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email: reg.body.email, password: 'Password@123' })
+      .expect(200);
+    const me = await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${userLogin.body.accessToken}`)
+      .expect(200);
+    const userId = me.body.id;
+
+    const locked = await request(app.getHttpServer())
+      .patch(`/api/admin/users/${userId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'locked' })
+      .expect(200);
+    expect(locked.body.status).toBe('locked');
+
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email: reg.body.email, password: 'Password@123' })
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .patch(`/api/admin/users/${userId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'active' })
+      .expect(200);
+  });
+
+  it('cập nhật trạng thái user không tồn tại trả 404 USER_NOT_FOUND', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email: 'admin@bank.local', password: 'Admin@123' })
+      .expect(200);
+    const res = await request(app.getHttpServer())
+      .patch('/api/admin/users/00000000-0000-4000-8000-000000000000/status')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .send({ status: 'locked' })
+      .expect(404);
+    expect(res.body.code).toBe('USER_NOT_FOUND');
+  });
+
   it('Swagger JSON có các endpoint chính', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/docs-json')
