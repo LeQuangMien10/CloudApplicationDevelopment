@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  HttpCode,
-  HttpStatus,
-  NotImplementedException,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service.js';
 import {
@@ -35,10 +28,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Đăng nhập bằng email + mật khẩu, trả JWT' })
   @ApiResponse({ status: 200, type: LoginResponseDto })
-  @ApiResponse({ status: 401, description: 'INVALID_CREDENTIALS' })
-  login(@Body() dto: LoginDto): LoginResponseDto {
-    // TODO(TV2): kiểm tra user active, bcrypt.compare, ký JWT { sub, role }
-    void dto;
-    throw new NotImplementedException();
+  @ApiResponse({
+    status: 401,
+    description: 'INVALID_CREDENTIALS hoặc USER_LOCKED',
+  })
+  login(@Body() dto: LoginDto): Promise<LoginResponseDto> {
+    return this.authService.login(dto);
   }
 }

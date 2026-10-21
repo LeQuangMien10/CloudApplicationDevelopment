@@ -1,10 +1,17 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { hash } from 'bcrypt';
+import { JwtService } from '@nestjs/jwt';
+import { compare, hash } from 'bcrypt';
 import { DataSource } from 'typeorm';
 import { AccountsService } from '../accounts/accounts.service.js';
 import { AppException } from '../common/exceptions/app.exception.js';
-import { User } from '../users/entities/user.entity.js';
-import { RegisterDto, RegisterResponseDto } from './dto/auth.dto.js';
+import { User, UserStatus } from '../users/entities/user.entity.js';
+import { UsersService } from '../users/users.service.js';
+import {
+  LoginDto,
+  LoginResponseDto,
+  RegisterDto,
+  RegisterResponseDto,
+} from './dto/auth.dto.js';
 
 const BCRYPT_COST = 12;
 
@@ -22,13 +29,15 @@ function isUniqueViolation(err: unknown, constraint: string): boolean {
 
 /** Phụ trách: TV2 Châu Anh
  * - register(): hash bcrypt, tạo User + Account trong 1 DB transaction
- * - login(): sẽ làm ở task 3  
+ * - login(): so khớp mật khẩu, kiểm tra trạng thái, ký JWT { sub, role }
  */
 @Injectable()
 export class AuthService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly accountsService: AccountsService,
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {
@@ -66,5 +75,38 @@ export class AuthService {
       }
       throw err;
     }
+  }
+
+  async login(dto: LoginDto): Promise<LoginResponseDto> {
+    const user = await this.usersService.findByEmailWithPassword(dto.email);
+
+    // Sai email hoặc sai mật khẩu -> cùng một thông báo, không lộ email nào tồn tại
+    if (!user || !(await compare(dto.password, user.passwordHash))) {
+      throw new AppException(
+        'INVALID_CREDENTIALS',
+        'Email hoặc mật khẩu không đúng',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    // So khớp mật khẩu TRƯỚC, khóa SAU: chỉ người biết đúng mật khẩu mới thấy tài khoản bị khóa
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new AppException(
+        'USER_LOCKED',
+        'Tài khoản đã bị khóa',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    const accessToken = await this.jwtService.signAsync({
+      sub: user.id,
+      role: user.role,
+    });
+    const { exp, iat } = this.jwtService.decode(accessToken) as {
+      exp: number;
+      iat: number;
+    };
+
+    return { accessToken, expiresIn: exp - iat };
   }
 }
