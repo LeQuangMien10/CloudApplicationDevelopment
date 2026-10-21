@@ -1,6 +1,5 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import { isUniqueViolation } from '../common/db-errors.js';
 import { AppException } from '../common/exceptions/app.exception.js';
 import { DEFAULT_CURRENCY } from '../common/money.js';
 import { generateAccountNumber } from './account-number.util.js';
@@ -10,37 +9,42 @@ import { Account } from './entities/account.entity.js';
 @Injectable()
 export class AccountsService {
   /**
-   * Tạo tài khoản VND số dư 0 cho user mới.  
+   * Tạo tài khoản VND số dư 0 cho user mới.
    * Nhận EntityManager để chạy chung transaction với việc tạo user (đề nghị của TV1).
+   *
+   * Trùng số tài khoản thì sinh số khác và thử lại. Dùng INSERT ... ON CONFLICT DO NOTHING
+   * thay vì bắt lỗi UNIQUE: trong PostgreSQL, sau một lỗi thì cả transaction bị hủy
+   * và lần INSERT tiếp theo cũng lỗi, nên không thể thử lại bằng try/catch.
+   *
+   * @param nextNumber cho phép test truyền số tài khoản cố định
    */
   async createForUser(
     manager: EntityManager,
     userId: string,
+    nextNumber: () => string = generateAccountNumber,
   ): Promise<Account> {
     const MAX_TRIES = 5;
 
     for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-      try {
-        const accountNumber = generateAccountNumber();
-        const result = await manager.insert(Account, {
-          userId,
-          accountNumber,
-          currency: DEFAULT_CURRENCY,
-        });
+      const accountNumber = nextNumber();
+      const result = await manager
+        .createQueryBuilder()
+        .insert()
+        .into(Account)
+        .values({ userId, accountNumber, currency: DEFAULT_CURRENCY })
+        .orIgnore()
+        .returning('id')
+        .execute();
+
+      const inserted = result.raw as { id: string }[];
+      if (inserted.length > 0) {
         return manager.create(Account, {
-          id: result.identifiers[0].id,
+          id: inserted[0].id,
           userId,
           accountNumber,
         });
-      } catch (err) {
-        if (
-          !isUniqueViolation(err, 'accounts_account_number_key') ||
-          attempt === MAX_TRIES
-        ) {
-          throw err;
-        }
-        // trùng số tài khoản (xác suất rất nhỏ) -> vòng lặp sinh số khác rồi thử lại
       }
+      // trùng số tài khoản (xác suất rất nhỏ): vòng lặp sinh số khác rồi thử lại
     }
     throw new AppException(
       'ACCOUNT_NUMBER_GENERATION_FAILED',
