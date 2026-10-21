@@ -15,6 +15,14 @@ import {
 
 const BCRYPT_COST = 12;
 
+/**
+ * Hash của một mật khẩu ngẫu nhiên. Khi email không tồn tại vẫn chạy
+ * bcrypt.compare với hash này để thời gian phản hồi không tiết lộ
+ * email có tồn tại trong hệ thống hay không (timing attack).
+ */
+const DUMMY_HASH =
+  '$2b$12$VfMBfdYr4NiKjLwVlN9R6.CLZWXNTlpZy72bsJkUYc5c0wCBYscwG';
+
 /** Mã 23505 = vi phạm UNIQUE của Postgres; kiểm tra đúng ràng buộc cụ thể. */
 function isUniqueViolation(err: unknown, constraint: string): boolean {
   const e = err as {
@@ -80,8 +88,13 @@ export class AuthService {
   async login(dto: LoginDto): Promise<LoginResponseDto> {
     const user = await this.usersService.findByEmailWithPassword(dto.email);
 
-    // Sai email hoặc sai mật khẩu -> cùng một thông báo, không lộ email nào tồn tại
-    if (!user || !(await compare(dto.password, user.passwordHash))) {
+    // Luôn chạy bcrypt.compare (kể cả khi email không tồn tại) để thời gian
+    // phản hồi đồng nhất; sai email hoặc sai mật khẩu -> cùng một thông báo
+    const passwordOk = await compare(
+      dto.password,
+      user?.passwordHash ?? DUMMY_HASH,
+    );
+    if (!user || !passwordOk) {
       throw new AppException(
         'INVALID_CREDENTIALS',
         'Email hoặc mật khẩu không đúng',

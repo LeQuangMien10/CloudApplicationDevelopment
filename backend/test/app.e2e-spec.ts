@@ -136,6 +136,13 @@ describe('Khung API (e2e)', () => {
       .expect(200);
     expect(locked.body.status).toBe('locked');
 
+    // token đã cấp trước đó mất hiệu lực NGAY khi user bị khóa
+    const meLocked = await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${userLogin.body.accessToken}`)
+      .expect(401);
+    expect(meLocked.body.code).toBe('USER_LOCKED');
+
     await request(app.getHttpServer())
       .post('/api/auth/login')
       .send({ email: reg.body.email, password: 'Password@123' })
@@ -145,6 +152,12 @@ describe('Khung API (e2e)', () => {
       .patch(`/api/admin/users/${userId}/status`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ status: 'active' })
+      .expect(200);
+
+    // mở khóa xong token cũ dùng lại được
+    await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${userLogin.body.accessToken}`)
       .expect(200);
   });
 
@@ -159,6 +172,35 @@ describe('Khung API (e2e)', () => {
       .send({ status: 'locked' })
       .expect(404);
     expect(res.body.code).toBe('USER_NOT_FOUND');
+  });
+
+  it('admin list với page=0 trả 400 VALIDATION_ERROR', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email: 'admin@bank.local', password: 'Admin@123' })
+      .expect(200);
+    const res = await request(app.getHttpServer())
+      .get('/api/admin/users?page=0')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .expect(400);
+    expect(res.body.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('admin không thể tự khóa chính mình (422 CANNOT_LOCK_SELF)', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email: 'admin@bank.local', password: 'Admin@123' })
+      .expect(200);
+    const me = await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .expect(200);
+    const res = await request(app.getHttpServer())
+      .patch(`/api/admin/users/${me.body.id}/status`)
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .send({ status: 'locked' })
+      .expect(422);
+    expect(res.body.code).toBe('CANNOT_LOCK_SELF');
   });
 
   it('Swagger JSON có các endpoint chính', async () => {

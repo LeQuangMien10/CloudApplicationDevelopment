@@ -1,11 +1,9 @@
 import {
   Body,
   Controller,
-  DefaultValuePipe,
   Get,
   HttpStatus,
   Param,
-  ParseIntPipe,
   ParseUUIDPipe,
   Patch,
   Query,
@@ -17,11 +15,14 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/current-user.decorator.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { Roles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
+import type { RequestUser } from '../auth/jwt.strategy.js';
 import { AppException } from '../common/exceptions/app.exception.js';
-import { UserRole } from './entities/user.entity.js';
+import { UserRole, UserStatus } from './entities/user.entity.js';
+import { ListUsersQuery } from './dto/list-users.query.js';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto.js';
 import { UsersService } from './users.service.js';
 
@@ -37,24 +38,31 @@ export class AdminUsersController {
   @Get()
   @ApiOperation({ summary: '(Bonus) Danh sách người dùng, phân trang' })
   @ApiResponse({ status: 200, description: '{ items, total, page, limit }' })
-  list(
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-  ) {
-    return this.usersService.findPaginated(
-      page,
-      Math.min(Math.max(limit, 1), 100),
-    );
+  @ApiResponse({ status: 400, description: 'VALIDATION_ERROR (page < 1...)' })
+  list(@Query() query: ListUsersQuery) {
+    return this.usersService.findPaginated(query.page, query.limit);
   }
 
   @Patch(':id/status')
   @ApiOperation({ summary: '(Bonus) Khóa hoặc mở người dùng' })
   @ApiResponse({ status: 200, description: 'User sau khi cập nhật trạng thái' })
   @ApiResponse({ status: 404, description: 'USER_NOT_FOUND' })
+  @ApiResponse({
+    status: 422,
+    description: 'CANNOT_LOCK_SELF - admin không thể tự khóa mình',
+  })
   async updateStatus(
+    @CurrentUser() admin: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserStatusDto,
   ) {
+    if (admin.id === id && dto.status === UserStatus.LOCKED) {
+      throw new AppException(
+        'CANNOT_LOCK_SELF',
+        'Không thể tự khóa tài khoản của chính mình',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
     const user = await this.usersService.updateStatus(id, dto.status);
     if (!user) {
       throw new AppException(

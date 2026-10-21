@@ -19,6 +19,11 @@ export class UsersService {
       .getOne();
   }
 
+  /** Dùng bởi JwtStrategy để kiểm tra trạng thái mỗi request. */
+  findById(id: string): Promise<User | null> {
+    return this.users.findOneBy({ id });
+  }
+
   /** Danh sách user mới nhất trước. passwordHash bị ẩn sẵn bởi select:false. */
   async findPaginated(
     page: number,

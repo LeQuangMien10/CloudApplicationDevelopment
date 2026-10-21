@@ -13,6 +13,10 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   ): TUser {
     void info;
     if (err || !user) {
+      // Lỗi nghiệp vụ từ JwtStrategy.validate() (vd: USER_LOCKED) giữ nguyên mã
+      if (err instanceof AppException) {
+        throw err;
+      }
       throw new AppException(
         'UNAUTHORIZED',
         'Chưa đăng nhập hoặc token không hợp lệ',

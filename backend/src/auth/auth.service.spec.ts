@@ -17,7 +17,9 @@ describe('AuthService', () => {
   const jwtService = { signAsync: vi.fn(), decode: vi.fn() };
   const manager = { insert: vi.fn() };
   const dataSource = {
-    transaction: vi.fn(async (cb: (m: EntityManager) => unknown) => cb(manager)),
+    transaction: vi.fn(async (cb: (m: EntityManager) => unknown) =>
+      cb(manager),
+    ),
   };
 
   const service = new AuthService(
@@ -91,16 +93,18 @@ describe('AuthService', () => {
   });
 
   describe('login()', () => {
-    const activeUser = {
-      id: 'u1',
-      email: 'an@example.com',
-      passwordHash: '$2b$12$hash',
-      role: UserRole.CUSTOMER,
-      status: UserStatus.ACTIVE,
-    } as User;
+    const makeUser = (overrides: Partial<User> = {}): User =>
+      ({
+        id: 'u1',
+        email: 'an@example.com',
+        passwordHash: '$2b$12$hash',
+        role: UserRole.CUSTOMER,
+        status: UserStatus.ACTIVE,
+        ...overrides,
+      }) as User;
 
     it('đăng nhập đúng -> trả accessToken và expiresIn 900', async () => {
-      usersService.findByEmailWithPassword.mockResolvedValue(activeUser);
+      usersService.findByEmailWithPassword.mockResolvedValue(makeUser());
       vi.mocked(compare).mockResolvedValue(true as never);
       jwtService.signAsync.mockResolvedValue('token-abc' as never);
       jwtService.decode.mockReturnValue({ exp: 1000, iat: 100 });
@@ -118,7 +122,7 @@ describe('AuthService', () => {
     });
 
     it('sai mật khẩu -> 401 INVALID_CREDENTIALS', async () => {
-      usersService.findByEmailWithPassword.mockResolvedValue(activeUser);
+      usersService.findByEmailWithPassword.mockResolvedValue(makeUser());
       vi.mocked(compare).mockResolvedValue(false as never);
 
       const err = await service
@@ -133,8 +137,9 @@ describe('AuthService', () => {
       expect(err.getStatus()).toBe(HttpStatus.UNAUTHORIZED);
     });
 
-    it('email không tồn tại -> INVALID_CREDENTIALS, không gọi bcrypt.compare', async () => {
+    it('email không tồn tại -> INVALID_CREDENTIALS, vẫn so hash giả (chống timing attack)', async () => {
       usersService.findByEmailWithPassword.mockResolvedValue(null);
+      vi.mocked(compare).mockResolvedValue(false as never);
 
       const err = await service
         .login({ email: 'nobody@example.com', password: 'Password@123' })
@@ -144,14 +149,13 @@ describe('AuthService', () => {
         );
 
       expect(err.code).toBe('INVALID_CREDENTIALS');
-      expect(vi.mocked(compare)).not.toHaveBeenCalled();
+      expect(vi.mocked(compare)).toHaveBeenCalledTimes(1);
     });
 
     it('user bị khóa -> 401 USER_LOCKED', async () => {
-      usersService.findByEmailWithPassword.mockResolvedValue({
-        ...activeUser,
-        status: UserStatus.LOCKED,
-      });
+      usersService.findByEmailWithPassword.mockResolvedValue(
+        makeUser({ status: UserStatus.LOCKED }),
+      );
       vi.mocked(compare).mockResolvedValue(true as never);
 
       const err = await service
