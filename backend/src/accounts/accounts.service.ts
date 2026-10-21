@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
+import { isUniqueViolation } from '../common/db-errors.js';
 import { AppException } from '../common/exceptions/app.exception.js';
 import { DEFAULT_CURRENCY } from '../common/money.js';
 import { generateAccountNumber } from './account-number.util.js';
@@ -47,16 +48,4 @@ export class AccountsService {
       HttpStatus.INTERNAL_SERVER_ERROR,
     );
   }
-}
-
-/** Mã 23505 = vi phạm UNIQUE của Postgres; kiểm tra đúng ràng buộc cụ thể. */
-function isUniqueViolation(err: unknown, constraint: string): boolean {
-  const e = err as {
-    code?: string;
-    constraint?: string;
-    driverError?: { code?: string; constraint?: string };
-  };
-  const code = e.code ?? e.driverError?.code;
-  const name = e.constraint ?? e.driverError?.constraint;
-  return code === '23505' && name === constraint;
 }

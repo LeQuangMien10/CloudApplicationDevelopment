@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { compare, hash } from 'bcrypt';
 import { DataSource } from 'typeorm';
 import { AccountsService } from '../accounts/accounts.service.js';
+import { isUniqueViolation } from '../common/db-errors.js';
 import { AppException } from '../common/exceptions/app.exception.js';
 import { User, UserStatus } from '../users/entities/user.entity.js';
 import { UsersService } from '../users/users.service.js';
@@ -22,18 +23,6 @@ const BCRYPT_COST = 12;
  */
 const DUMMY_HASH =
   '$2b$12$VfMBfdYr4NiKjLwVlN9R6.CLZWXNTlpZy72bsJkUYc5c0wCBYscwG';
-
-/** Mã 23505 = vi phạm UNIQUE của Postgres; kiểm tra đúng ràng buộc cụ thể. */
-function isUniqueViolation(err: unknown, constraint: string): boolean {
-  const e = err as {
-    code?: string;
-    constraint?: string;
-    driverError?: { code?: string; constraint?: string };
-  };
-  const code = e.code ?? e.driverError?.code;
-  const name = e.constraint ?? e.driverError?.constraint;
-  return code === '23505' && name === constraint;
-}
 
 /** Phụ trách: TV2 Châu Anh
  * - register(): hash bcrypt, tạo User + Account trong 1 DB transaction
