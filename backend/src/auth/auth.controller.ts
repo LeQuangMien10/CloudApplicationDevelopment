@@ -1,6 +1,17 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service.js';
+import { CurrentUser } from './current-user.decorator.js';
+import { JwtAuthGuard } from './jwt-auth.guard.js';
+import type { RequestUser } from './jwt.strategy.js';
 import {
   LoginDto,
   LoginResponseDto,
@@ -34,5 +45,13 @@ export class AuthController {
   })
   login(@Body() dto: LoginDto): Promise<LoginResponseDto> {
     return this.authService.login(dto);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Thông tin người dùng đang đăng nhập (từ JWT)' })
+  @ApiResponse({ status: 401, description: 'UNAUTHORIZED' })
+  me(@CurrentUser() user: RequestUser): RequestUser {
+    return user;
   }
 }
