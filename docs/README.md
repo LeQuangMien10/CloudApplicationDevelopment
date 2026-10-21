@@ -4,4 +4,5 @@
 - [database.md](database.md): schema và quy tắc dữ liệu
 - [api.md](api.md): danh sách API, định dạng lỗi
 - [adr/](adr/): các quyết định kiến trúc
-- Sequence diagram đăng nhập (TV2) và chuyển khoản (TV3): đặt trong thư mục này
+- [sequence-dang-nhap.md](sequence-dang-nhap.md): sequence diagram đăng nhập (TV2)
+- Sequence diagram chuyển khoản (TV3): đặt trong thư mục này
