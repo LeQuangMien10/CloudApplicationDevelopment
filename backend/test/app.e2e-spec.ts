@@ -35,13 +35,47 @@ describe('Khung API (e2e)', () => {
     expect(res.headers['x-request-id']).toBe('test-req-1');
   });
 
-  it('API chưa làm trả 501 NOT_IMPLEMENTED', async () => {
+  it('luồng auth: đăng ký -> đăng nhập -> /auth/me', async () => {
+    const email = `e2e-${Date.now()}@example.com`;
+
+    const reg = await request(app.getHttpServer())
+      .post('/api/auth/register')
+      .send({ fullName: 'E2E User', email, password: 'Password@123' })
+      .expect(201);
+    expect(reg.body).toEqual({
+      id: expect.any(String),
+      fullName: 'E2E User',
+      email,
+      accountNumber: expect.any(String),
+    });
+
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email, password: 'Password@123' })
+      .expect(200);
+    expect(login.body.accessToken).toBeDefined();
+    expect(login.body.expiresIn).toBe(900);
+
+    const me = await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .expect(200);
+    expect(me.body).toEqual({ id: reg.body.id, role: 'customer' });
+  });
+
+  it('đăng nhập sai mật khẩu trả 401 INVALID_CREDENTIALS', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/login')
-      .send({ email: 'an@example.com', password: 'Password@123' })
-      .expect(501);
-    expect(res.body.code).toBe('NOT_IMPLEMENTED');
-    expect(res.body.requestId).toBeDefined();
+      .send({ email: 'an@example.com', password: 'Sai@matkhau1' })
+      .expect(401);
+    expect(res.body.code).toBe('INVALID_CREDENTIALS');
+  });
+
+  it('endpoint được bảo vệ chặn khi không có token', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .expect(401);
+    expect(res.body.code).toBe('UNAUTHORIZED');
   });
 
   it('Swagger JSON có các endpoint chính', async () => {
