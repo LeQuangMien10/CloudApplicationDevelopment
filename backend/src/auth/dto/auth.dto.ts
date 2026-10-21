@@ -56,3 +56,17 @@ export class LoginResponseDto {
   @ApiProperty({ example: 900, description: 'Số giây token còn hiệu lực' })
   expiresIn: number;
 }
+
+export class RegisterResponseDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  fullName: string;
+
+  @ApiProperty()
+  email: string;
+
+  @ApiProperty({ description: 'Tài khoản VND tự tạo, số dư 0' })
+  accountNumber: string;
+}
