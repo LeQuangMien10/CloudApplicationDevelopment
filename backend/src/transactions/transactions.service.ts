@@ -31,6 +31,18 @@ export class TransactionsService {
         private readonly accountRepo: Repository<Account>,
     ) { }
 
+    async getTransactionById(transactionId: string) {
+        const transaction = await this.txRepo.findOne({
+            where: { id: transactionId }
+        });
+
+        if (!transaction) {
+            throw new NotFoundException('Giao dịch không tồn tại');
+        }
+
+        return transaction;
+    }
+
     async getTransactionHistory(userId: string, query: ListTransactionsQuery) {
         const { accountId, page = 1, limit = 10, from, to } = query;
         const { start, end } = buildDateRangeFilter(from, to);

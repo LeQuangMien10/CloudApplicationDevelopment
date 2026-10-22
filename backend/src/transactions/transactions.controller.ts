@@ -67,14 +67,20 @@ export class TransactionsController {
   })
   list(
     @CurrentUser() user: RequestUser,
-    @Query() query: ListTransactionsQuery) {
+    @Query() query: ListTransactionsQuery
+  ) {
     return this.transactionsService.getTransactionHistory(user.id, query);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Chi tiết và trạng thái một giao dịch' })
-  getOne(@Param('id', ParseUUIDPipe) id: string) {
-    void id;
-    throw new NotImplementedException();
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary:
+      'Chi tiết và trạng thái một giao dịch'
+  })
+  getOne(
+    @Param('id', ParseUUIDPipe) transactionId: string,
+  ) {
+    return this.transactionsService.getTransactionById(transactionId);
   }
-}
+} 
