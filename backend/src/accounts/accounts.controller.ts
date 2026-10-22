@@ -1,5 +1,9 @@
-import { Controller, Get, NotImplementedException } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/current-user.decorator.js';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
+import type { RequestUser } from '../auth/jwt.strategy.js';
+import { AccountsService } from './accounts.service.js';
 
 /**
  * Phụ trách: TV3 Nhật
@@ -9,10 +13,12 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 @ApiBearerAuth()
 @Controller('accounts')
 export class AccountsController {
+  constructor(private readonly accountsService: AccountsService) {}
+
   @Get('me')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Tài khoản và số dư của người đang đăng nhập' })
-  getMyAccounts() {
-    // TODO(TV3): trả danh sách { id, accountNumber, balance, currency, status } của user hiện tại
-    throw new NotImplementedException();
+  getMyAccounts(@CurrentUser() user: RequestUser) {
+    return this.accountsService.findByUserId(user.id);
   }
 }

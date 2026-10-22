@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { EntityManager } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { AppException } from '../common/exceptions/app.exception.js';
 import { DEFAULT_CURRENCY } from '../common/money.js';
 import { generateAccountNumber } from './account-number.util.js';
@@ -8,6 +9,24 @@ import { Account } from './entities/account.entity.js';
 /** Phụ trách: TV3 Nhật (đọc tài khoản), TV2 Châu Anh dùng để tạo tài khoản khi đăng ký. */
 @Injectable()
 export class AccountsService {
+  constructor(
+    @InjectRepository(Account)
+    private readonly accountsRepository: Repository<Account>,
+  ) {}
+
+  findByUserId(userId: string) {
+    return this.accountsRepository.find({
+      select: {
+        id: true,
+        accountNumber: true,
+        balance: true,
+        currency: true,
+        status: true,
+      },
+      where: { userId },
+    });
+  }
+
   /**
    * Tạo tài khoản VND số dư 0 cho user mới.
    * Nhận EntityManager để chạy chung transaction với việc tạo user (đề nghị của TV1).
