@@ -1,4 +1,10 @@
-import { Injectable } from '@nestjs/common';
+// transactions.service.ts
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { DataSource, Repository } from 'typeorm';
+import { Transaction } from './entities/transaction.entity.js';
+import { Account } from '../accounts/entities/account.entity.js';
+import { ListTransactionsQuery } from './dto/list-transactions.query.js';
+import { InjectRepository } from '@nestjs/typeorm';
 
 /**
  * Phụ trách: TV3 Nhật
@@ -17,4 +23,85 @@ import { Injectable } from '@nestjs/common';
  *  Tham khảo cách ghi bút toán trong src/database/seed.ts (hàm deposit).
  */
 @Injectable()
-export class TransactionsService {}
+export class TransactionsService {
+    constructor(
+        @InjectRepository(Transaction)
+        private readonly txRepo: Repository<Transaction>,
+        @InjectRepository(Account)
+        private readonly accountRepo: Repository<Account>,
+    ) { }
+
+    async getTransactionHistory(userId: string, query: ListTransactionsQuery) {
+        const { accountId, page = 1, limit = 10, from, to } = query;
+        const { start, end } = buildDateRangeFilter(from, to);
+
+        // 1. Kiểm tra & Xác định tài khoản thuộc về User
+        let targetAccountId = accountId;
+
+        if (targetAccountId) {
+            const account = await this.accountRepo.findOne({
+                where: { id: targetAccountId, userId },
+            });
+            if (!account) {
+                throw new NotFoundException('Tài khoản không tồn tại hoặc không thuộc sở hữu của bạn');
+            }
+        } else {
+            const account = await this.accountRepo.findOne({
+                where: { userId },
+            });
+            if (!account) {
+                throw new NotFoundException('Không tìm thấy tài khoản nào của người dùng');
+            }
+            targetAccountId = account.id;
+        }
+
+        // 2. Build QueryBuilder 
+        const queryBuilder = this.txRepo
+            .createQueryBuilder('tx')
+            .where('(tx.fromAccount = :accountId OR tx.toAccount = :accountId)', {
+                accountId: targetAccountId,
+            });
+
+        // 3. apply time
+        if (start) {
+            queryBuilder.andWhere('tx.createdAt >= :start', { start });
+        }
+        if (end) {
+            queryBuilder.andWhere('tx.createdAt <= :end', { end });
+        }
+
+        // 4. pagination
+        const pageNum = Math.max(1, Number(page) || 1);
+        const limitNum = Math.max(1, Number(limit) || 10);
+
+        const [transactions, total] = await queryBuilder
+            .orderBy('tx.createdAt', 'DESC')
+            .skip((pageNum - 1) * limitNum)
+            .take(limitNum)
+            .getManyAndCount();
+
+        return {
+            transactions,
+            total,
+            page: pageNum,
+            limit: limitNum,
+        };
+    }
+}
+
+function buildDateRangeFilter(fromDate?: string, toDate?: string) {
+    let start: Date | undefined;
+    let end: Date | undefined;
+
+    if (fromDate) {
+        start = new Date(fromDate);
+        start.setHours(0, 0, 0, 0);
+    }
+
+    if (toDate) {
+        end = new Date(toDate);
+        end.setHours(23, 59, 59, 999);
+    }
+
+    return { start, end };
+}

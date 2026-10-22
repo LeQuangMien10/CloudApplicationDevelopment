@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -16,9 +17,12 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { ListTransactionsQuery } from './dto/list-transactions.query.js';
 import { TransferDto } from './dto/transfer.dto.js';
 import { TransactionsService } from './transactions.service.js';
+import { CurrentUser } from '../auth/current-user.decorator.js';
+import type { RequestUser } from '../auth/jwt.strategy.js';
 
 /**
  * Phụ trách: TV3 Nhật
@@ -28,7 +32,7 @@ import { TransactionsService } from './transactions.service.js';
 @ApiBearerAuth()
 @Controller('transactions')
 export class TransactionsController {
-  constructor(private readonly transactionsService: TransactionsService) {}
+  constructor(private readonly transactionsService: TransactionsService) { }
 
   @Post('transfer')
   @ApiOperation({ summary: 'Chuyển khoản nội bộ trong 1 DB transaction' })
@@ -57,12 +61,14 @@ export class TransactionsController {
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Lịch sử giao dịch của tôi: tiền vào, tiền ra, phân trang',
   })
-  list(@Query() query: ListTransactionsQuery) {
-    void query;
-    throw new NotImplementedException();
+  list(
+    @CurrentUser() user: RequestUser,
+    @Query() query: ListTransactionsQuery) {
+    return this.transactionsService.getTransactionHistory(user.id, query);
   }
 
   @Get(':id')
