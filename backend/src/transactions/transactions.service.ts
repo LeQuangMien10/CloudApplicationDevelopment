@@ -44,7 +44,7 @@ export class TransactionsService {
         });
 
         if (!transaction) {
-            throw new NotFoundException('Giao dịch không tồn tại');
+            throw new AppException('TRANSACTION_NOT_FOUND', 'Giao dịch không tồn tại', HttpStatus.NOT_FOUND);
         }
 
         return transaction;
@@ -62,14 +62,14 @@ export class TransactionsService {
                 where: { id: targetAccountId, userId },
             });
             if (!account) {
-                throw new NotFoundException('Tài khoản không tồn tại hoặc không thuộc sở hữu của bạn');
+                throw new AppException('ACCOUNT_NOT_FOUND', 'Tài khoản không tồn tại hoặc không thuộc sở hữu của bạn', HttpStatus.NOT_FOUND);
             }
         } else {
             const account = await this.accountRepo.findOne({
                 where: { userId },
             });
             if (!account) {
-                throw new NotFoundException('Không tìm thấy tài khoản nào của người dùng');
+                throw new AppException('ACCOUNT_NOT_FOUND', 'Không tìm thấy tài khoản nào của người dùng', HttpStatus.NOT_FOUND);
             }
             targetAccountId = account.id;
         }
@@ -110,7 +110,7 @@ export class TransactionsService {
     async transfer(userId: string, idempotencyKey: string | undefined, dto: TransferDto) {
         // 1. Kiểm tra Idempotency-Key
         if (!idempotencyKey) {
-            throw new AppException('IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key is required', HttpStatus.BAD_REQUEST);
+            throw new AppException('IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key là bắt buộc', HttpStatus.BAD_REQUEST);
         }
         const requestHash = createHash('sha256')
             .update(JSON.stringify(dto))
@@ -173,11 +173,11 @@ export class TransactionsService {
             });
 
             if (!fromAccountMeta) {
-                throw new AppException('SENDER_ACCOUNT_NOT_FOUND', 'Sender account not found', HttpStatus.UNPROCESSABLE_ENTITY);
+                throw new AppException('SENDER_ACCOUNT_NOT_FOUND', 'Không tìm thấy tài khoản người gửi', HttpStatus.UNPROCESSABLE_ENTITY);
             }
 
             if (fromAccountMeta.accountNumber === dto.toAccountNumber) {
-                throw new AppException('SAME_ACCOUNT_TRANSFER', 'Cannot transfer to the same account', HttpStatus.UNPROCESSABLE_ENTITY);
+                throw new AppException('SAME_ACCOUNT_TRANSFER', 'Không thể chuyển khoản đến cùng một tài khoản', HttpStatus.UNPROCESSABLE_ENTITY);
             }
 
             // 4. Lock theo thứ tự cố định — chống deadlock
@@ -207,21 +207,22 @@ export class TransactionsService {
                 });
             }
 
-            if (!fromAccount) throw new AppException('SENDER_ACCOUNT_NOT_FOUND', 'Sender account not found', HttpStatus.UNPROCESSABLE_ENTITY);
-            if (!toAccount) throw new AppException('TARGET_ACCOUNT_NOT_FOUND', 'Target account not found', HttpStatus.UNPROCESSABLE_ENTITY);
+
+            if (!fromAccount) throw new AppException('SENDER_ACCOUNT_NOT_FOUND', 'Không tìm thấy tài khoản người gửi', HttpStatus.UNPROCESSABLE_ENTITY);
+            if (!toAccount) throw new AppException('TARGET_ACCOUNT_NOT_FOUND', 'Không tìm thấy tài khoản người nhận', HttpStatus.UNPROCESSABLE_ENTITY);
 
 
             // 5. Validate sau khi lock (đọc data mới nhất)
             if (fromAccount.status !== AccountStatus.ACTIVE) {
-                throw new AppException('SENDER_ACCOUNT_NOT_ACTIVE', 'Sender account is not active', HttpStatus.UNPROCESSABLE_ENTITY);
+                throw new AppException('SENDER_ACCOUNT_NOT_ACTIVE', 'Tài khoản người gửi không hoạt động', HttpStatus.UNPROCESSABLE_ENTITY);
             }
             if (toAccount.status !== AccountStatus.ACTIVE) {
-                throw new AppException('TARGET_ACCOUNT_NOT_ACTIVE', 'Target account is not active', HttpStatus.UNPROCESSABLE_ENTITY);
+                throw new AppException('TARGET_ACCOUNT_NOT_ACTIVE', 'Tài khoản người nhận không hoạt động', HttpStatus.UNPROCESSABLE_ENTITY);
             }
 
             // 6. Kiểm tra số dư
             if (compareAmounts(fromAccount.balance, dto.amount) < 0) {
-                throw new AppException('INSUFFICIENT_BALANCE', 'Insufficient balance for the transfer', HttpStatus.UNPROCESSABLE_ENTITY);
+                throw new AppException('INSUFFICIENT_BALANCE', 'Số dư không đủ để thực hiện chuyển khoản', HttpStatus.UNPROCESSABLE_ENTITY);
             }
 
             // 7. Cập nhật balance
