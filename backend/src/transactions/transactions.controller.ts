@@ -35,6 +35,7 @@ export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) { }
 
   @Post('transfer')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Chuyển khoản nội bộ trong 1 DB transaction' })
   @ApiHeader({
     name: 'Idempotency-Key',
@@ -52,12 +53,10 @@ export class TransactionsController {
   })
   transfer(
     @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @CurrentUser() user: RequestUser,
     @Body() dto: TransferDto,
   ) {
-    // TODO(TV3): xem các bước trong transactions.service.ts
-    void idempotencyKey;
-    void dto;
-    throw new NotImplementedException();
+    return this.transactionsService.transfer(user.id, idempotencyKey, dto);
   }
 
   @Get()

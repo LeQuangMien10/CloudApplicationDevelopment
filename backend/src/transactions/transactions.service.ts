@@ -1,10 +1,14 @@
 // transactions.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { DataSource, Repository } from 'typeorm';
-import { Transaction } from './entities/transaction.entity.js';
-import { Account } from '../accounts/entities/account.entity.js';
+import { Transaction, TransactionType, TransactionStatus } from './entities/transaction.entity.js';
+import { Account, AccountStatus } from '../accounts/entities/account.entity.js';
 import { ListTransactionsQuery } from './dto/list-transactions.query.js';
+import { IdempotencyKey } from './entities/idempotency-key.entity.js';
 import { InjectRepository } from '@nestjs/typeorm';
+import { TransferDto } from './dto/transfer.dto.js';
+import { AppException } from '../common/exceptions/app.exception.js';
 
 /**
  * Phụ trách: TV3 Nhật
@@ -29,6 +33,9 @@ export class TransactionsService {
         private readonly txRepo: Repository<Transaction>,
         @InjectRepository(Account)
         private readonly accountRepo: Repository<Account>,
+        @InjectRepository(IdempotencyKey)
+        private readonly idempotencyRepo: Repository<IdempotencyKey>,
+        private readonly dataSource: DataSource,
     ) { }
 
     async getTransactionById(transactionId: string) {
@@ -99,6 +106,200 @@ export class TransactionsService {
             limit: limitNum,
         };
     }
+
+    async transfer(userId: string, idempotencyKey: string | undefined, dto: TransferDto) {
+        // 1. Kiểm tra Idempotency-Key
+        if (!idempotencyKey) {
+            throw new AppException('IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key is required', HttpStatus.BAD_REQUEST);
+        }
+        const requestHash = createHash('sha256')
+            .update(JSON.stringify(dto))
+            .digest('hex');
+
+        const existingKey = await this.idempotencyRepo.findOne({
+            where: { userId, key: idempotencyKey },
+        });
+        if (existingKey) {
+            if (existingKey.requestHash !== requestHash) {
+                throw new AppException(
+                    'IDEMPOTENCY_CONFLICT',
+                    'Idempotency-Key was already used with a different request',
+                    HttpStatus.CONFLICT,
+                );
+            }
+            return existingKey.responseBody;
+        }
+
+        // 2. kiểm tra số tiền nhập vào
+        if (compareAmounts(dto.amount, '0') <= 0) {
+            throw new AppException('INVALID_AMOUNT', 'Số tiền phải lớn hơn 0', HttpStatus.UNPROCESSABLE_ENTITY);
+        }
+        if (compareAmounts(dto.amount, '9999999999999999.99') > 0) {
+            throw new AppException('AMOUNT_TOO_LARGE', 'Số tiền không được vượt quá 9,999,999,999,999,999.99', HttpStatus.UNPROCESSABLE_ENTITY);
+        }
+
+        // transfer
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+        try {
+            const accountRepo = queryRunner.manager.getRepository(Account);
+            const txRepo = queryRunner.manager.getRepository(Transaction);
+            const idempotencyRepo = queryRunner.manager.getRepository(IdempotencyKey);
+
+            // 3. Lấy account_number KHÔNG LOCK — chỉ để sort
+            const fromAccountMeta = await accountRepo.findOne({
+                where: { userId: userId },
+                select: { id: true, accountNumber: true },
+            });
+
+            if (!fromAccountMeta) {
+                throw new AppException('SENDER_ACCOUNT_NOT_FOUND', 'Sender account not found', HttpStatus.NOT_FOUND);
+            }
+
+            if (fromAccountMeta.accountNumber === dto.toAccountNumber) {
+                throw new AppException('SAME_ACCOUNT_TRANSFER', 'Cannot transfer to the same account', HttpStatus.BAD_REQUEST);
+            }
+
+            // 4. Lock theo thứ tự cố định — chống deadlock
+            const shouldLockFromFirst =
+                fromAccountMeta.accountNumber < dto.toAccountNumber;
+
+            let fromAccount: Account | null = null;
+            let toAccount: Account | null = null;
+
+            if (shouldLockFromFirst) {
+                fromAccount = await accountRepo.findOne({
+                    where: { userId: userId },
+                    lock: { mode: 'pessimistic_write' },
+                });
+                toAccount = await accountRepo.findOne({
+                    where: { accountNumber: dto.toAccountNumber },
+                    lock: { mode: 'pessimistic_write' },
+                });
+            } else {
+                toAccount = await accountRepo.findOne({
+                    where: { accountNumber: dto.toAccountNumber },
+                    lock: { mode: 'pessimistic_write' },
+                });
+                fromAccount = await accountRepo.findOne({
+                    where: { userId: userId },
+                    lock: { mode: 'pessimistic_write' },
+                });
+            }
+
+            if (!fromAccount) throw new AppException('SENDER_ACCOUNT_NOT_FOUND', 'Sender account not found', HttpStatus.NOT_FOUND);
+            if (!toAccount) throw new AppException('TARGET_ACCOUNT_NOT_FOUND', 'Target account not found', HttpStatus.NOT_FOUND);
+
+
+            // 5. Validate sau khi lock (đọc data mới nhất)
+            if (fromAccount.status !== AccountStatus.ACTIVE) {
+                throw new AppException('SENDER_ACCOUNT_NOT_ACTIVE', 'Sender account is not active', HttpStatus.BAD_REQUEST);
+            }
+            if (toAccount.status !== AccountStatus.ACTIVE) {
+                throw new AppException('TARGET_ACCOUNT_NOT_ACTIVE', 'Target account is not active', HttpStatus.BAD_REQUEST);
+            }
+
+            // 6. Kiểm tra số dư
+            const currentBalance = parseFloat(fromAccount.balance);
+            const transferAmount = parseFloat(dto.amount);
+
+            if (currentBalance < transferAmount) {
+                throw new AppException('INSUFFICIENT_BALANCE', 'Insufficient balance for the transfer', HttpStatus.BAD_REQUEST);
+            }
+
+            // 7. Cập nhật balance
+            const newFromBalance = (currentBalance - transferAmount).toFixed(2);
+            const newToBalance = (parseFloat(toAccount.balance) + transferAmount).toFixed(2);
+
+            fromAccount.balance = newFromBalance;
+            toAccount.balance = newToBalance;
+
+            await accountRepo.save(fromAccount);
+            await accountRepo.save(toAccount);
+
+
+            // 8. Tạo transaction record va idempotency key record
+            const idempotency = idempotencyRepo.create({
+                userId: userId,
+                key: idempotencyKey,
+                requestHash: 'dummy_hash', 
+                transactionId: null, 
+                responseCode: HttpStatus.CREATED,
+                responseBody: null, 
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // expires in 24 hours
+            });
+
+            await idempotencyRepo.save(idempotency);
+
+            const transaction = txRepo.create({
+                type: TransactionType.TRANSFER,
+                status: TransactionStatus.COMPLETED,
+                fromAccountId: fromAccount.id,
+                toAccountId: toAccount.id,
+                amount: dto.amount,
+                description: dto.description || null,
+                initiatedBy: userId,
+            });
+
+            await txRepo.save(transaction);
+
+            // Update the idempotency record with the transaction ID
+            idempotency.transactionId = transaction.id;
+            idempotency.responseBody = formatTransactionResponse(transaction, newFromBalance, {
+                from_account_number: fromAccount.accountNumber,
+                to_account_number: toAccount.accountNumber,
+                from_user_id: fromAccount.userId,
+                to_user_id: toAccount.userId,
+            });
+            await idempotencyRepo.save(idempotency);
+
+            await queryRunner.commitTransaction();
+
+            return idempotency.responseBody;
+        } catch (error) {
+            await queryRunner.rollbackTransaction();
+            throw error;
+        }
+        finally {
+            await queryRunner.release();
+        }
+    }
+}
+
+function formatTransactionResponse(
+    tx: Transaction,
+    newBalance?: string,
+    parties?: {
+        from_account_number?: string;
+        to_account_number?: string;
+        from_user_id?: string;
+        to_user_id?: string;
+    },
+) {
+    return {
+        message: 'Giao dịch thành công',
+        transaction: {
+            id: tx.id,
+            amount: tx.amount,
+            status: tx.status,
+            description: tx.description,
+            created_at: tx.createdAt,
+            ...parties,
+        },
+        ...(newBalance && { new_balance: newBalance }),
+    };
+}
+
+
+function compareAmounts(left: string, right: string): number {
+    const toMinorUnits = (amount: string) => {
+        const [whole, fraction = ''] = amount.split('.');
+        return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
+    };
+
+    const difference = toMinorUnits(left) - toMinorUnits(right);
+    return difference === 0n ? 0 : difference > 0n ? 1 : -1;
 }
 
 function buildDateRangeFilter(fromDate?: string, toDate?: string) {
