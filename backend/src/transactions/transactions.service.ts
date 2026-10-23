@@ -177,7 +177,7 @@ export class TransactionsService {
             }
 
             if (fromAccountMeta.accountNumber === dto.toAccountNumber) {
-                throw new AppException('SAME_ACCOUNT_TRANSFER', 'Không thể chuyển khoản đến cùng một tài khoản', HttpStatus.UNPROCESSABLE_ENTITY);
+                throw new AppException('SAME_ACCOUNT', 'Không thể chuyển khoản đến cùng một tài khoản', HttpStatus.UNPROCESSABLE_ENTITY);
             }
 
             // 4. Lock theo thứ tự cố định — chống deadlock
@@ -222,7 +222,7 @@ export class TransactionsService {
 
             // 6. Kiểm tra số dư
             if (compareAmounts(fromAccount.balance, dto.amount) < 0) {
-                throw new AppException('INSUFFICIENT_BALANCE', 'Số dư không đủ để thực hiện chuyển khoản', HttpStatus.UNPROCESSABLE_ENTITY);
+                throw new AppException('INSUFFICIENT_FUNDS', 'Số dư không đủ để thực hiện chuyển khoản', HttpStatus.UNPROCESSABLE_ENTITY);
             }
 
             // 7. Cập nhật balance
