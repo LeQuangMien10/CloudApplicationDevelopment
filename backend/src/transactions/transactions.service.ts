@@ -116,20 +116,6 @@ export class TransactionsService {
             .update(JSON.stringify(dto))
             .digest('hex');
 
-        const existingKey = await this.idempotencyRepo.findOne({
-            where: { userId, key: idempotencyKey },
-        });
-        if (existingKey) {
-            if (existingKey.requestHash !== requestHash) {
-                throw new AppException(
-                    'IDEMPOTENCY_CONFLICT',
-                    'Idempotency-Key was already used with a different request',
-                    HttpStatus.CONFLICT,
-                );
-            }
-            return existingKey.responseBody;
-        }
-
         // 2. kiểm tra số tiền nhập vào
         if (compareAmounts(dto.amount, '0') <= 0) {
             throw new AppException('INVALID_AMOUNT', 'Số tiền phải lớn hơn 0', HttpStatus.UNPROCESSABLE_ENTITY);
@@ -147,18 +133,51 @@ export class TransactionsService {
             const txRepo = queryRunner.manager.getRepository(Transaction);
             const idempotencyRepo = queryRunner.manager.getRepository(IdempotencyKey);
 
+            const reservation = await idempotencyRepo
+                .createQueryBuilder()
+                .insert()
+                .into(IdempotencyKey)
+                .values({
+                    userId,
+                    key: idempotencyKey,
+                    requestHash,
+                    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                })
+                .orIgnore()
+                .execute();
+
+            if (reservation.raw.length === 0) {
+                const existingKey = await idempotencyRepo.findOneBy({
+                    userId,
+                    key: idempotencyKey,
+                });
+                if (!existingKey || existingKey.requestHash !== requestHash) {
+                    throw new AppException(
+                        'IDEMPOTENCY_CONFLICT',
+                        'Idempotency-Key đã được sử dụng với yêu cầu khác',
+                        HttpStatus.CONFLICT,
+                    );
+                }
+                await queryRunner.commitTransaction();
+                return existingKey.responseBody;
+            }
+            const idempotency = await idempotencyRepo.findOneByOrFail({
+                userId,
+                key: idempotencyKey,
+            });
+
             // 3. Lấy account_number KHÔNG LOCK — chỉ để sort
             const fromAccountMeta = await accountRepo.findOne({
-                where: { userId: userId },
+                where: { id: dto.fromAccountId, userId },
                 select: { id: true, accountNumber: true },
             });
 
             if (!fromAccountMeta) {
-                throw new AppException('SENDER_ACCOUNT_NOT_FOUND', 'Sender account not found', HttpStatus.NOT_FOUND);
+                throw new AppException('SENDER_ACCOUNT_NOT_FOUND', 'Sender account not found', HttpStatus.UNPROCESSABLE_ENTITY);
             }
 
             if (fromAccountMeta.accountNumber === dto.toAccountNumber) {
-                throw new AppException('SAME_ACCOUNT_TRANSFER', 'Cannot transfer to the same account', HttpStatus.BAD_REQUEST);
+                throw new AppException('SAME_ACCOUNT_TRANSFER', 'Cannot transfer to the same account', HttpStatus.UNPROCESSABLE_ENTITY);
             }
 
             // 4. Lock theo thứ tự cố định — chống deadlock
@@ -170,7 +189,7 @@ export class TransactionsService {
 
             if (shouldLockFromFirst) {
                 fromAccount = await accountRepo.findOne({
-                    where: { userId: userId },
+                    where: { id: dto.fromAccountId, userId },
                     lock: { mode: 'pessimistic_write' },
                 });
                 toAccount = await accountRepo.findOne({
@@ -183,55 +202,47 @@ export class TransactionsService {
                     lock: { mode: 'pessimistic_write' },
                 });
                 fromAccount = await accountRepo.findOne({
-                    where: { userId: userId },
+                    where: { id: dto.fromAccountId, userId },
                     lock: { mode: 'pessimistic_write' },
                 });
             }
 
-            if (!fromAccount) throw new AppException('SENDER_ACCOUNT_NOT_FOUND', 'Sender account not found', HttpStatus.NOT_FOUND);
-            if (!toAccount) throw new AppException('TARGET_ACCOUNT_NOT_FOUND', 'Target account not found', HttpStatus.NOT_FOUND);
+            if (!fromAccount) throw new AppException('SENDER_ACCOUNT_NOT_FOUND', 'Sender account not found', HttpStatus.UNPROCESSABLE_ENTITY);
+            if (!toAccount) throw new AppException('TARGET_ACCOUNT_NOT_FOUND', 'Target account not found', HttpStatus.UNPROCESSABLE_ENTITY);
 
 
             // 5. Validate sau khi lock (đọc data mới nhất)
             if (fromAccount.status !== AccountStatus.ACTIVE) {
-                throw new AppException('SENDER_ACCOUNT_NOT_ACTIVE', 'Sender account is not active', HttpStatus.BAD_REQUEST);
+                throw new AppException('SENDER_ACCOUNT_NOT_ACTIVE', 'Sender account is not active', HttpStatus.UNPROCESSABLE_ENTITY);
             }
             if (toAccount.status !== AccountStatus.ACTIVE) {
-                throw new AppException('TARGET_ACCOUNT_NOT_ACTIVE', 'Target account is not active', HttpStatus.BAD_REQUEST);
+                throw new AppException('TARGET_ACCOUNT_NOT_ACTIVE', 'Target account is not active', HttpStatus.UNPROCESSABLE_ENTITY);
             }
 
             // 6. Kiểm tra số dư
-            const currentBalance = parseFloat(fromAccount.balance);
-            const transferAmount = parseFloat(dto.amount);
-
-            if (currentBalance < transferAmount) {
-                throw new AppException('INSUFFICIENT_BALANCE', 'Insufficient balance for the transfer', HttpStatus.BAD_REQUEST);
+            if (compareAmounts(fromAccount.balance, dto.amount) < 0) {
+                throw new AppException('INSUFFICIENT_BALANCE', 'Insufficient balance for the transfer', HttpStatus.UNPROCESSABLE_ENTITY);
             }
 
             // 7. Cập nhật balance
-            const newFromBalance = (currentBalance - transferAmount).toFixed(2);
-            const newToBalance = (parseFloat(toAccount.balance) + transferAmount).toFixed(2);
+            const debitResult = await accountRepo
+                .createQueryBuilder()
+                .update(Account)
+                .set({ balance: () => 'balance - :amount' })
+                .where('id = :id', { id: fromAccount.id, amount: dto.amount })
+                .returning('balance')
+                .execute();
+            const newFromBalance = debitResult.raw[0].balance as string;
 
-            fromAccount.balance = newFromBalance;
-            toAccount.balance = newToBalance;
-
-            await accountRepo.save(fromAccount);
-            await accountRepo.save(toAccount);
+            await accountRepo
+                .createQueryBuilder()
+                .update(Account)
+                .set({ balance: () => 'balance + :amount' })
+                .where('id = :id', { id: toAccount.id, amount: dto.amount })
+                .execute();
 
 
             // 8. Tạo transaction record va idempotency key record
-            const idempotency = idempotencyRepo.create({
-                userId: userId,
-                key: idempotencyKey,
-                requestHash: 'dummy_hash', 
-                transactionId: null, 
-                responseCode: HttpStatus.CREATED,
-                responseBody: null, 
-                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // expires in 24 hours
-            });
-
-            await idempotencyRepo.save(idempotency);
-
             const transaction = txRepo.create({
                 type: TransactionType.TRANSFER,
                 status: TransactionStatus.COMPLETED,
@@ -246,6 +257,7 @@ export class TransactionsService {
 
             // Update the idempotency record with the transaction ID
             idempotency.transactionId = transaction.id;
+            idempotency.responseCode = HttpStatus.CREATED;
             idempotency.responseBody = formatTransactionResponse(transaction, newFromBalance, {
                 from_account_number: fromAccount.accountNumber,
                 to_account_number: toAccount.accountNumber,
