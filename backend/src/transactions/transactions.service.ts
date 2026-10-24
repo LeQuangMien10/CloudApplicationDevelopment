@@ -117,9 +117,6 @@ export class TransactionsService {
             .digest('hex');
 
         // 2. kiểm tra số tiền nhập vào
-        if (compareAmounts(dto.amount, '0') <= 0) {
-            throw new AppException('INVALID_AMOUNT', 'Số tiền phải lớn hơn 0', HttpStatus.UNPROCESSABLE_ENTITY);
-        }
         if (compareAmounts(dto.amount, '9999999999999999.99') > 0) {
             throw new AppException('AMOUNT_TOO_LARGE', 'Số tiền không được vượt quá 9,999,999,999,999,999.99', HttpStatus.UNPROCESSABLE_ENTITY);
         }
