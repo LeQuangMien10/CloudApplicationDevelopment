@@ -143,6 +143,14 @@ export class TransactionsService {
         HttpStatus.BAD_REQUEST,
       );
     }
+    if (idempotencyKey.length > 64) {
+      throw new AppException(
+        'IDEMPOTENCY_KEY_TOO_LONG',
+        'Idempotency-Key không được vượt quá 64 ký tự',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    
     const requestHash = createHash('sha256')
       .update(JSON.stringify(dto))
       .digest('hex');
