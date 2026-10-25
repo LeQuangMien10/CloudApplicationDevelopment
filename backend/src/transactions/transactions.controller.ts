@@ -78,8 +78,9 @@ export class TransactionsController {
       'Chi tiết và trạng thái một giao dịch'
   })
   getOne(
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) transactionId: string,
   ) {
-    return this.transactionsService.getTransactionById(transactionId);
+    return this.transactionsService.getTransactionById(user.id, transactionId);
   }
 } 

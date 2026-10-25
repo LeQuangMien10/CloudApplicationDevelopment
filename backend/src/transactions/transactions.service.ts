@@ -38,10 +38,17 @@ export class TransactionsService {
         private readonly dataSource: DataSource,
     ) { }
 
-    async getTransactionById(transactionId: string) {
-        const transaction = await this.txRepo.findOne({
-            where: { id: transactionId }
-        });
+    async getTransactionById(userId: string, transactionId: string) {
+        const transaction = await this.txRepo
+            .createQueryBuilder('transaction')
+            .innerJoin('transaction.fromAccount', 'fromAccount')
+            .innerJoin('transaction.toAccount', 'toAccount')
+            .where('transaction.id = :transactionId', { transactionId })
+            .andWhere(
+                '(fromAccount.userId = :userId OR toAccount.userId = :userId)',
+                { userId },
+            )
+            .getOne();
 
         if (!transaction) {
             throw new AppException('TRANSACTION_NOT_FOUND', 'Giao dịch không tồn tại', HttpStatus.NOT_FOUND);
