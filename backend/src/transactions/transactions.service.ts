@@ -265,8 +265,8 @@ export class TransactionsService {
             idempotency.transactionId = transaction.id;
             idempotency.responseCode = HttpStatus.CREATED;
             idempotency.responseBody = formatTransactionResponse(transaction, newFromBalance, {
-                from_account_number: fromAccount.accountNumber,
-                to_account_number: toAccount.accountNumber,
+                fromAccountNumber: fromAccount.accountNumber,
+                toAccountNumber: toAccount.accountNumber,
             });
             await idempotencyRepo.save(idempotency);
 
@@ -287,8 +287,8 @@ function formatTransactionResponse(
     tx: Transaction,
     newBalance?: string,
     parties?: {
-        from_account_number?: string;
-        to_account_number?: string;
+        fromAccountNumber?: string;
+        toAccountNumber?: string;
     },
 ) {
     return {
@@ -298,10 +298,10 @@ function formatTransactionResponse(
             amount: tx.amount,
             status: tx.status,
             description: tx.description,
-            created_at: tx.createdAt,
+            createdAt: tx.createdAt,
             ...parties,
         },
-        ...(newBalance && { new_balance: newBalance }),
+        ...(newBalance && { newBalance }),
     };
 }
 

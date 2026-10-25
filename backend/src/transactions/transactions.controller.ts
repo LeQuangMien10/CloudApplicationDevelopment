@@ -49,7 +49,8 @@ export class TransactionsController {
   })
   @ApiResponse({
     status: 422,
-    description: 'INSUFFICIENT_FUNDS, ACCOUNT_NOT_ACTIVE, SAME_ACCOUNT, ...',
+    description:
+      'AMOUNT_TOO_LARGE, SENDER_ACCOUNT_NOT_FOUND, TARGET_ACCOUNT_NOT_FOUND, SENDER_ACCOUNT_NOT_ACTIVE, TARGET_ACCOUNT_NOT_ACTIVE, INSUFFICIENT_FUNDS, SAME_ACCOUNT',
   })
   transfer(
     @Headers('idempotency-key') idempotencyKey: string | undefined,

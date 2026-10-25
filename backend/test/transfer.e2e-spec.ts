@@ -109,12 +109,12 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
 
         expect(response.body).toMatchObject({
             message: 'Giao dịch thành công',
-            new_balance: expectedSenderBalance,
+            newBalance: expectedSenderBalance,
             transaction: {
                 amount,
                 status: 'completed',
-                from_account_number: sender.accountNumber,
-                to_account_number: recipient.accountNumber,
+                fromAccountNumber: sender.accountNumber,
+                toAccountNumber: recipient.accountNumber,
             },
         });
 
@@ -251,4 +251,3 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
             .expect(401);
     });
 });
-
