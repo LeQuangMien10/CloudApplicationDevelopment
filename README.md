@@ -30,6 +30,14 @@ npm run start:dev                 # http://localhost:3000/api
 
 Swagger: http://localhost:3000/api/docs
 
+Hoặc chạy cả DB và backend bằng Docker, không cần cài Node (migration tự chạy khi backend khởi động):
+
+```bash
+docker compose up -d --build
+docker compose exec backend node dist/database/seed.js   # chỉ cần chạy lần đầu
+curl http://localhost:3000/api/health
+```
+
 Database dev chạy ở cổng **5433** để không trùng với PostgreSQL có thể đã cài sẵn trên máy (cổng 5432). Kết nối bằng DBeaver, pgAdmin: `localhost:5433`, user `bank`, mật khẩu `bank_dev_password`, database `banking`. Muốn đổi cổng thì sửa `DB_PORT` trong `.env`, không cần sửa code.
 
 Tài khoản mẫu sau khi seed:

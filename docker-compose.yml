@@ -1,5 +1,6 @@
-# Môi trường dev local. Hiện chỉ có PostgreSQL.
-# TV5 (Hiếu) sẽ bổ sung service backend, frontend khi có Dockerfile.
+# Chạy toàn bộ: docker compose up -d --build
+# Chỉ chạy DB để dev backend trên máy: docker compose up -d db
+# TODO(TV5): thêm service frontend khi TV4 khởi tạo xong project
 services:
   db:
     image: postgres:16-alpine
@@ -17,6 +18,26 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  backend:
+    build: ./backend
+    container_name: banking-backend
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Trong mạng docker, backend gọi DB bằng tên service và cổng bên trong container
+      DB_HOST: db
+      DB_PORT: 5432
+      PORT: 3000
+      # Mặc định chỉ để dev chạy được khi chưa có .env. Trên cloud bắt buộc đặt trong .env
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me}
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:
