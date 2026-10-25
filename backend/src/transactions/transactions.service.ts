@@ -256,6 +256,7 @@ export class TransactionsService {
                 amount: dto.amount,
                 description: dto.description || null,
                 initiatedBy: userId,
+                completedAt: new Date(),
             });
 
             await txRepo.save(transaction);
@@ -266,8 +267,6 @@ export class TransactionsService {
             idempotency.responseBody = formatTransactionResponse(transaction, newFromBalance, {
                 from_account_number: fromAccount.accountNumber,
                 to_account_number: toAccount.accountNumber,
-                from_user_id: fromAccount.userId,
-                to_user_id: toAccount.userId,
             });
             await idempotencyRepo.save(idempotency);
 
@@ -290,8 +289,6 @@ function formatTransactionResponse(
     parties?: {
         from_account_number?: string;
         to_account_number?: string;
-        from_user_id?: string;
-        to_user_id?: string;
     },
 ) {
     return {
