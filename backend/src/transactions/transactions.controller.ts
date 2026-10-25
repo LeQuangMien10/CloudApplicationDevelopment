@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Headers,
-  NotImplementedException,
   Param,
   ParseUUIDPipe,
   Post,
@@ -32,7 +31,7 @@ import type { RequestUser } from '../auth/jwt.strategy.js';
 @ApiBearerAuth()
 @Controller('transactions')
 export class TransactionsController {
-  constructor(private readonly transactionsService: TransactionsService) { }
+  constructor(private readonly transactionsService: TransactionsService) {}
 
   @Post('transfer')
   @UseGuards(JwtAuthGuard)
@@ -67,7 +66,7 @@ export class TransactionsController {
   })
   list(
     @CurrentUser() user: RequestUser,
-    @Query() query: ListTransactionsQuery
+    @Query() query: ListTransactionsQuery,
   ) {
     return this.transactionsService.getTransactionHistory(user.id, query);
   }
@@ -75,8 +74,7 @@ export class TransactionsController {
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({
-    summary:
-      'Chi tiết và trạng thái một giao dịch'
+    summary: 'Chi tiết và trạng thái một giao dịch',
   })
   getOne(
     @CurrentUser() user: RequestUser,
@@ -84,4 +82,4 @@ export class TransactionsController {
   ) {
     return this.transactionsService.getTransactionById(user.id, transactionId);
   }
-} 
+}
