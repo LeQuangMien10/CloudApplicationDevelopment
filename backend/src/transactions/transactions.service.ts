@@ -147,24 +147,16 @@ export class TransactionsService {
     }
     if (idempotencyKey.length > 64) {
       throw new AppException(
-        'IDEMPOTENCY_KEY_TOO_LONG',
-        'Idempotency-Key không được vượt quá 64 ký tự',
+        'VALIDATION_ERROR',
+        'Dữ liệu không hợp lệ',
         HttpStatus.BAD_REQUEST,
+        ['Idempotency-Key không được vượt quá 64 ký tự'],
       );
     }
-    
+
     const requestHash = createHash('sha256')
       .update(JSON.stringify(dto))
       .digest('hex');
-
-    // 2. kiểm tra số tiền nhập vào
-    if (compareAmounts(dto.amount, '9999999999999999.99') > 0) {
-      throw new AppException(
-        'AMOUNT_TOO_LARGE',
-        'Số tiền không được vượt quá 9,999,999,999,999,999.99',
-        HttpStatus.UNPROCESSABLE_ENTITY,
-      );
-    }
 
     // transfer
     const queryRunner = this.dataSource.createQueryRunner();
@@ -208,7 +200,7 @@ export class TransactionsService {
         key: idempotencyKey,
       });
 
-      // 3. Lấy account_number KHÔNG LOCK — chỉ để sort
+      // 2. Lấy account_number KHÔNG LOCK — chỉ để sort
       const fromAccountMeta = await accountRepo.findOne({
         where: { id: dto.fromAccountId, userId },
         select: { id: true, accountNumber: true },
@@ -218,7 +210,7 @@ export class TransactionsService {
         throw new AppException(
           'SENDER_ACCOUNT_NOT_FOUND',
           'Không tìm thấy tài khoản người gửi',
-          HttpStatus.UNPROCESSABLE_ENTITY,
+          HttpStatus.NOT_FOUND,
         );
       }
 
@@ -230,7 +222,7 @@ export class TransactionsService {
         );
       }
 
-      // 4. Lock theo thứ tự cố định — chống deadlock
+      // 3. Lock theo thứ tự cố định — chống deadlock
       const shouldLockFromFirst =
         fromAccountMeta.accountNumber < dto.toAccountNumber;
 
@@ -261,16 +253,16 @@ export class TransactionsService {
         throw new AppException(
           'SENDER_ACCOUNT_NOT_FOUND',
           'Không tìm thấy tài khoản người gửi',
-          HttpStatus.UNPROCESSABLE_ENTITY,
+          HttpStatus.NOT_FOUND,
         );
       if (!toAccount)
         throw new AppException(
           'TARGET_ACCOUNT_NOT_FOUND',
           'Không tìm thấy tài khoản người nhận',
-          HttpStatus.UNPROCESSABLE_ENTITY,
+          HttpStatus.NOT_FOUND,
         );
 
-      // 5. Validate sau khi lock (đọc data mới nhất)
+      // 4. Validate sau khi lock (đọc data mới nhất)
       if (fromAccount.status !== AccountStatus.ACTIVE) {
         throw new AppException(
           'SENDER_ACCOUNT_NOT_ACTIVE',
@@ -286,7 +278,7 @@ export class TransactionsService {
         );
       }
 
-      // 6. Kiểm tra số dư
+      // 5. Kiểm tra số dư
       if (compareAmounts(fromAccount.balance, dto.amount) < 0) {
         throw new AppException(
           'INSUFFICIENT_FUNDS',
@@ -295,7 +287,7 @@ export class TransactionsService {
         );
       }
 
-      // 7. Cập nhật balance
+      // 6. Cập nhật balance
       const debitResult = await accountRepo
         .createQueryBuilder()
         .update(Account)
@@ -314,7 +306,7 @@ export class TransactionsService {
         .execute();
       const newToBalance = creditResult.raw[0].balance as string;
 
-      // 8. Tạo transaction record va idempotency key record
+      // 7. Tạo transaction record va idempotency key record
       const transaction = txRepo.create({
         type: TransactionType.TRANSFER,
         status: TransactionStatus.COMPLETED,

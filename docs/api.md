@@ -103,16 +103,21 @@ Mỗi response có header `X-Request-Id`. Client có thể tự gửi header nà
 
 | HTTP | Code | Khi nào |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | Dữ liệu sai định dạng, `details` liệt kê từng lỗi |
+| 400 | `VALIDATION_ERROR` | Dữ liệu sai định dạng, `details` liệt kê từng lỗi. Gồm cả `amount` vượt 16 chữ số phần nguyên (tối đa `9999999999999999.99`) và `Idempotency-Key` dài quá 64 ký tự |
 | 401 | `UNAUTHORIZED` | Thiếu token, token sai hoặc hết hạn |
 | 401 | `INVALID_CREDENTIALS` | Sai email hoặc mật khẩu (không phân biệt để tránh dò email) |
 | 401 | `USER_LOCKED` | User bị khóa, kể cả khi dùng token cấp trước đó |
 | 403 | `FORBIDDEN` | Đã đăng nhập nhưng không đủ quyền |
 | 404 | `USER_NOT_FOUND` | Admin thao tác trên user không tồn tại |
-| 404 | `ACCOUNT_NOT_FOUND` | Tài khoản không tồn tại (TV3) |
+| 400 | `IDEMPOTENCY_KEY_REQUIRED` | Chuyển tiền thiếu header `Idempotency-Key` (TV3) |
+| 404 | `ACCOUNT_NOT_FOUND` | Xem lịch sử giao dịch của tài khoản không tồn tại hoặc không thuộc mình (TV3) |
+| 404 | `SENDER_ACCOUNT_NOT_FOUND` | Tài khoản nguồn không tồn tại hoặc không thuộc user đang đăng nhập (TV3) |
+| 404 | `TARGET_ACCOUNT_NOT_FOUND` | Không có tài khoản đích với số tài khoản đã gửi (TV3) |
+| 404 | `TRANSACTION_NOT_FOUND` | Giao dịch không tồn tại, hoặc không phải giao dịch của mình (TV3) |
 | 409 | `EMAIL_ALREADY_EXISTS` | Đăng ký trùng email |
 | 409 | `IDEMPOTENCY_CONFLICT` | Cùng Idempotency-Key nhưng khác nội dung (TV3) |
 | 422 | `CANNOT_LOCK_SELF` | Admin tự khóa chính mình |
-| 422 | `INSUFFICIENT_FUNDS`, `ACCOUNT_NOT_ACTIVE`, `SAME_ACCOUNT` | Vi phạm nghiệp vụ chuyển tiền (TV3) |
+| 422 | `SENDER_ACCOUNT_NOT_ACTIVE`, `TARGET_ACCOUNT_NOT_ACTIVE` | Tài khoản nguồn hoặc đích không ở trạng thái active (TV3) |
+| 422 | `INSUFFICIENT_FUNDS`, `SAME_ACCOUNT` | Vi phạm nghiệp vụ chuyển tiền (TV3) |
 | 500 | `INTERNAL_ERROR` | Lỗi hệ thống, tra log bằng `requestId` |
 | 501 | `NOT_IMPLEMENTED` | API chưa làm xong |

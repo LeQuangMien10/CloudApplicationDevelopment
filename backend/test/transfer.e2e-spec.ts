@@ -13,10 +13,15 @@ import {
   TransactionType,
 } from '../src/transactions/entities/transaction.entity.js';
 import { User } from '../src/users/entities/user.entity.js';
+import {
+  openOwnerDataSource,
+  withLedgerMaintenance,
+} from './support/owner-data-source.js';
 
 describe('POST /api/transactions/transfer (DB thật)', () => {
   let app: INestApplication;
   let dataSource: DataSource;
+  let ownerDataSource: DataSource;
   let accessToken: string;
   let sender: Account;
   let recipient: Account;
@@ -54,6 +59,8 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
     await app.init();
 
     dataSource = app.get(DataSource);
+
+    ownerDataSource = await openOwnerDataSource();
     const senderUser = await dataSource
       .getRepository(User)
       .findOneByOrFail({ email: 'an@example.com' });
@@ -74,7 +81,7 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
   });
 
   afterEach(async () => {
-    await dataSource.transaction(async (manager) => {
+    await withLedgerMaintenance(ownerDataSource, async (manager) => {
       await manager
         .createQueryBuilder()
         .delete()
@@ -118,6 +125,7 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
   });
 
   afterAll(async () => {
+    await ownerDataSource.destroy();
     await app.close();
   });
 
@@ -155,30 +163,93 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
       dataSource.getRepository(Account).findOneByOrFail({ id: recipient.id }),
     ).resolves.toMatchObject({ balance: expectedRecipientBalance });
 
-    const entries = await dataSource
-      .getRepository(LedgerEntry)
-      .find({
-        where: { transactionId: response.body.transaction.id },
-        order: { direction: 'ASC' },
-      });
+    const entries = await dataSource.getRepository(LedgerEntry).find({
+      where: { transactionId: response.body.transaction.id },
+      order: { direction: 'ASC' },
+    });
     expect(entries).toHaveLength(2);
     expect(entries.map((entry) => entry.direction)).toEqual([
       'debit',
       'credit',
     ]);
     expect(entries.map((entry) => entry.amount)).toEqual([amount, amount]);
-    expect(entries.find((entry) => entry.accountId === sender.id)).toMatchObject(
-      {
-        direction: 'debit',
-        balanceAfter: expectedSenderBalance,
-      },
-    );
+    expect(
+      entries.find((entry) => entry.accountId === sender.id),
+    ).toMatchObject({
+      direction: 'debit',
+      balanceAfter: expectedSenderBalance,
+    });
     expect(
       entries.find((entry) => entry.accountId === recipient.id),
     ).toMatchObject({
       direction: 'credit',
       balanceAfter: expectedRecipientBalance,
     });
+  });
+
+  // 1b. Sổ cái chỉ được ghi thêm, kể cả khi lộ credential của app
+  it('1b. ledger_entries chỉ cho INSERT, không sửa/xóa được bằng user của app', async () => {
+    const response = await request(app.getHttpServer())
+      .post(transferPath)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('Idempotency-Key', key())
+      .send(transferBody())
+      .expect(201);
+    const transactionId = response.body.transaction.id;
+    const updateAmount = (manager: DataSource['manager']) =>
+      manager
+        .createQueryBuilder()
+        .update(LedgerEntry)
+        .set({ amount: '1.00' })
+        .where('transaction_id = :transactionId', { transactionId })
+        .execute();
+    const deleteDebit = (manager: DataSource['manager']) =>
+      manager
+        .createQueryBuilder()
+        .delete()
+        .from(LedgerEntry)
+        .where('transaction_id = :transactionId AND direction = :direction', {
+          transactionId,
+          direction: 'debit',
+        })
+        .execute();
+    const PERMISSION_DENIED = { code: '42501' };
+    const APPEND_ONLY = { code: '55000' };
+
+    // User của app: không có quyền, tự bật cờ bảo trì cũng vô ích
+    await expect(updateAmount(dataSource.manager)).rejects.toMatchObject(
+      PERMISSION_DENIED,
+    );
+    await expect(
+      dataSource.transaction(async (manager) => {
+        await manager.query(
+          `SELECT set_config('app.ledger_maintenance', 'on', true)`,
+        );
+        await deleteDebit(manager);
+      }),
+    ).rejects.toMatchObject(PERMISSION_DENIED);
+    await expect(
+      dataSource.query('TRUNCATE ledger_entries CASCADE'),
+    ).rejects.toMatchObject(PERMISSION_DENIED);
+
+    // Owner không bật cờ bảo trì: trigger vẫn chặn, kể cả TRUNCATE
+    await expect(updateAmount(ownerDataSource.manager)).rejects.toMatchObject(
+      APPEND_ONLY,
+    );
+    await expect(
+      ownerDataSource.transaction((manager) =>
+        manager.query('TRUNCATE ledger_entries'),
+      ),
+    ).rejects.toMatchObject(APPEND_ONLY);
+
+    // Owner bật cờ bảo trì: xóa một vế vẫn bị kiểm tra cân bằng chặn lúc commit
+    await expect(
+      withLedgerMaintenance(ownerDataSource, deleteDebit),
+    ).rejects.toMatchObject({ code: '23514' });
+
+    await expect(
+      dataSource.getRepository(LedgerEntry).countBy({ transactionId }),
+    ).resolves.toBe(2);
   });
 
   // 2. Gửi lại trùng Idempotency-Key + trùng Payload
@@ -205,6 +276,11 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
     await expect(
       dataSource.getRepository(Account).findOneByOrFail({ id: sender.id }),
     ).resolves.toMatchObject({ balance: expectedSenderBalance });
+    await expect(
+      dataSource.getRepository(LedgerEntry).countBy({
+        transactionId: first.body.transaction.id,
+      }),
+    ).resolves.toBe(2);
   });
 
   // 3. Cùng Idempotency-Key + khác Payload (Đổi amount)
@@ -253,7 +329,7 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
         ...transferBody(),
         fromAccountId: recipient.id,
       })
-      .expect(422);
+      .expect(404);
 
     expect(response.body.code).toBe('SENDER_ACCOUNT_NOT_FOUND');
   });

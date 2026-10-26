@@ -43,13 +43,22 @@ export class TransactionsController {
   })
   @ApiResponse({ status: 201, description: 'COMPLETED' })
   @ApiResponse({
+    status: 400,
+    description:
+      'IDEMPOTENCY_KEY_REQUIRED; VALIDATION_ERROR (sai body hoặc key dài quá 64 ký tự)',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'SENDER_ACCOUNT_NOT_FOUND, TARGET_ACCOUNT_NOT_FOUND',
+  })
+  @ApiResponse({
     status: 409,
     description: 'IDEMPOTENCY_CONFLICT: cùng key nhưng khác nội dung',
   })
   @ApiResponse({
     status: 422,
     description:
-      'AMOUNT_TOO_LARGE, SENDER_ACCOUNT_NOT_FOUND, TARGET_ACCOUNT_NOT_FOUND, SENDER_ACCOUNT_NOT_ACTIVE, TARGET_ACCOUNT_NOT_ACTIVE, INSUFFICIENT_FUNDS, SAME_ACCOUNT',
+      'SENDER_ACCOUNT_NOT_ACTIVE, TARGET_ACCOUNT_NOT_ACTIVE, INSUFFICIENT_FUNDS, SAME_ACCOUNT',
   })
   transfer(
     @Headers('idempotency-key') idempotencyKey: string | undefined,
