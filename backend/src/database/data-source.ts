@@ -6,4 +6,4 @@ import { buildDataSourceOptions } from './typeorm.config.js';
 config({ path: ['.env', '../.env'], quiet: true });
 
 /** Dùng cho TypeORM CLI: npm run migration:run | migration:revert | migration:generate */
-export default new DataSource(buildDataSourceOptions());
+export default new DataSource(buildDataSourceOptions(process.env, 'owner'));

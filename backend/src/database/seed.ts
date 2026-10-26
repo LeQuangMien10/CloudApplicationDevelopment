@@ -106,7 +106,9 @@ async function deposit(
 }
 
 async function main() {
-  const ds = await new DataSource(buildDataSourceOptions()).initialize();
+  const ds = await new DataSource(
+    buildDataSourceOptions(process.env, 'owner'),
+  ).initialize();
   try {
     if ((await ds.getRepository(User).count()) > 0) {
       console.log(

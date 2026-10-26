@@ -24,6 +24,7 @@ docker compose up -d db           # PostgreSQL ở cổng 5433
 cd backend
 npm install
 npm run migration:run             # tạo bảng
+npm run db:app-user               # tạo DB user cho backend (bank_app)
 npm run seed                      # dữ liệu mẫu
 npm run start:dev                 # http://localhost:3000/api
 ```
@@ -31,6 +32,8 @@ npm run start:dev                 # http://localhost:3000/api
 Swagger: http://localhost:3000/api/docs
 
 Database dev chạy ở cổng **5433** để không trùng với PostgreSQL có thể đã cài sẵn trên máy (cổng 5432). Kết nối bằng DBeaver, pgAdmin: `localhost:5433`, user `bank`, mật khẩu `bank_dev_password`, database `banking`. Muốn đổi cổng thì sửa `DB_PORT` trong `.env`, không cần sửa code.
+
+Backend không dùng user `bank` (owner) khi chạy mà dùng `DB_APP_USER` (mặc định `bank_app`), user này chỉ được `SELECT/INSERT` trên `ledger_entries`. `bank` chỉ dùng cho migration, seed và dọn dữ liệu test.
 
 Tài khoản mẫu sau khi seed:
 

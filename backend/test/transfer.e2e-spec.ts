@@ -247,6 +247,22 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
       withLedgerMaintenance(ownerDataSource, deleteDebit),
     ).rejects.toMatchObject({ code: '23514' });
 
+    // User của app che bảng transactions bằng temp table cùng tên: hàm kiểm tra
+    // vẫn đọc public.transactions nên transfer COMPLETED không có bút toán bị chặn
+    await expect(
+      dataSource.transaction(async (manager) => {
+        await manager.query(
+          'CREATE TEMP TABLE transactions (LIKE public.transactions) ON COMMIT DROP',
+        );
+        await manager.query(
+          `INSERT INTO public.transactions
+             (type, status, from_account_id, to_account_id, amount, description, initiated_by, completed_at)
+           VALUES ('transfer', 'completed', $1, $2, 1, $3, $4, now())`,
+          [sender.id, recipient.id, transferBody().description, senderUserId],
+        );
+      }),
+    ).rejects.toMatchObject({ code: '23514' });
+
     await expect(
       dataSource.getRepository(LedgerEntry).countBy({ transactionId }),
     ).resolves.toBe(2);

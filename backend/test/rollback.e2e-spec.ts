@@ -4,7 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
-import { DataSource, Repository, ObjectLiteral } from 'typeorm';
+import { DataSource, EntityManager, Repository, ObjectLiteral } from 'typeorm';
 import { vi } from 'vitest';
 import { Account } from '../src/accounts/entities/account.entity.js';
 import { setupApp } from '../src/app.setup.js';
@@ -13,10 +13,15 @@ import { IdempotencyKey } from '../src/transactions/entities/idempotency-key.ent
 import { LedgerEntry } from '../src/transactions/entities/ledger-entry.entity.js';
 import { Transaction, TransactionType } from '../src/transactions/entities/transaction.entity.js';
 import { User } from '../src/users/entities/user.entity.js';
+import {
+  openOwnerDataSource,
+  withLedgerMaintenance,
+} from './support/owner-data-source.js';
 
 describe('POST /api/transactions/transfer - rollback khi lỗi giữa chừng', () => {
   let app: INestApplication;
   let dataSource: DataSource;
+  let ownerDataSource: DataSource;
   let accessToken: string;
   let sender: Account;
   let recipient: Account;
@@ -41,6 +46,7 @@ describe('POST /api/transactions/transfer - rollback khi lỗi giữa chừng', 
 
   // Lấy bản save gốc trước khi bị spy
   const originalSave = Repository.prototype.save;
+  const originalManagerSave = EntityManager.prototype.save;
 
   // Làm save() throw khi entity đang lưu là `target`
   const failSaveOn = (target: unknown) =>
@@ -51,6 +57,16 @@ describe('POST /api/transactions/transfer - rollback khi lỗi giữa chừng', 
           throw new Error('Simulated DB failure');
         }
         return (originalSave as Function).apply(this, args);
+      });
+
+  const failLedgerSave = () =>
+    vi
+      .spyOn(EntityManager.prototype, 'save')
+      .mockImplementation(function (this: EntityManager, ...args: unknown[]) {
+        if (args[0] === LedgerEntry) {
+          throw new Error('Simulated ledger DB failure');
+        }
+        return (originalManagerSave as Function).apply(this, args);
       });
 
   // Kiểm tra DB trở về đúng trạng thái ban đầu
@@ -70,6 +86,19 @@ describe('POST /api/transactions/transfer - rollback khi lỗi giữa chừng', 
       }),
     ).toBe(0);
 
+    expect(
+      await dataSource
+        .getRepository(LedgerEntry)
+        .createQueryBuilder('entry')
+        .innerJoin('entry.transaction', 'transaction')
+        .where('transaction.initiated_by = :userId', { userId: senderUserId })
+        .andWhere('transaction.type = :type', { type: TransactionType.TRANSFER })
+        .andWhere('transaction.description = :description', {
+          description: 'E2E transfer: rollback test',
+        })
+        .getCount(),
+    ).toBe(0);
+
     await expect(
       dataSource
         .getRepository(IdempotencyKey)
@@ -86,6 +115,8 @@ describe('POST /api/transactions/transfer - rollback khi lỗi giữa chừng', 
     await app.init();
 
     dataSource = app.get(DataSource);
+
+    ownerDataSource = await openOwnerDataSource();
     const senderUser = await dataSource
       .getRepository(User)
       .findOneByOrFail({ email: 'an@example.com' });
@@ -108,7 +139,7 @@ describe('POST /api/transactions/transfer - rollback khi lỗi giữa chừng', 
   afterEach(async () => {
     vi.restoreAllMocks(); // luôn gỡ mock trước khi dọn dữ liệu
 
-    await dataSource.transaction(async (manager) => {
+    await withLedgerMaintenance(ownerDataSource, async (manager) => {
       await manager
         .createQueryBuilder()
         .delete()
@@ -147,6 +178,7 @@ describe('POST /api/transactions/transfer - rollback khi lỗi giữa chừng', 
   });
 
   afterAll(async () => {
+    await ownerDataSource.destroy();
     await app.close();
   });
 
@@ -196,5 +228,13 @@ describe('POST /api/transactions/transfer - rollback khi lỗi giữa chừng', 
 
     failing.mockRestore();
     await send(idempotencyKey).expect(201);
+  });
+
+  it('5. rollback khi ghi LedgerEntry bị lỗi', async () => {
+    const idempotencyKey = key();
+    failLedgerSave();
+
+    await send(idempotencyKey).expect(500);
+    await expectNothingPersisted(idempotencyKey);
   });
 });
