@@ -7,6 +7,7 @@ import { Account } from '../src/accounts/entities/account.entity.js';
 import { setupApp } from '../src/app.setup.js';
 import { AppModule } from '../src/app.module.js';
 import { IdempotencyKey } from '../src/transactions/entities/idempotency-key.entity.js';
+import { LedgerEntry } from '../src/transactions/entities/ledger-entry.entity.js';
 import {
   Transaction,
   TransactionType,
@@ -86,6 +87,19 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
       await manager
         .createQueryBuilder()
         .delete()
+        .from(LedgerEntry)
+        .where(
+          'transaction_id IN (SELECT id FROM transactions WHERE initiated_by = :userId AND type = :type AND description LIKE :description)',
+          {
+            userId: senderUserId,
+            type: TransactionType.TRANSFER,
+            description: 'E2E transfer:%',
+          },
+        )
+        .execute();
+      await manager
+        .createQueryBuilder()
+        .delete()
         .from(Transaction)
         .where(
           'initiated_by = :userId AND type = :type AND description LIKE :description',
@@ -140,6 +154,31 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
     await expect(
       dataSource.getRepository(Account).findOneByOrFail({ id: recipient.id }),
     ).resolves.toMatchObject({ balance: expectedRecipientBalance });
+
+    const entries = await dataSource
+      .getRepository(LedgerEntry)
+      .find({
+        where: { transactionId: response.body.transaction.id },
+        order: { direction: 'ASC' },
+      });
+    expect(entries).toHaveLength(2);
+    expect(entries.map((entry) => entry.direction)).toEqual([
+      'debit',
+      'credit',
+    ]);
+    expect(entries.map((entry) => entry.amount)).toEqual([amount, amount]);
+    expect(entries.find((entry) => entry.accountId === sender.id)).toMatchObject(
+      {
+        direction: 'debit',
+        balanceAfter: expectedSenderBalance,
+      },
+    );
+    expect(
+      entries.find((entry) => entry.accountId === recipient.id),
+    ).toMatchObject({
+      direction: 'credit',
+      balanceAfter: expectedRecipientBalance,
+    });
   });
 
   // 2. Gửi lại trùng Idempotency-Key + trùng Payload

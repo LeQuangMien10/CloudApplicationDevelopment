@@ -13,6 +13,7 @@ import { IdempotencyKey } from './entities/idempotency-key.entity.js';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TransferDto } from './dto/transfer.dto.js';
 import { AppException } from '../common/exceptions/app.exception.js';
+import { LedgerPostingService } from './services/ledger-posting.service.js';
 
 /**
  * Phụ trách: TV3 Nhật
@@ -40,6 +41,7 @@ export class TransactionsService {
     @InjectRepository(IdempotencyKey)
     private readonly idempotencyRepo: Repository<IdempotencyKey>,
     private readonly dataSource: DataSource,
+    private readonly ledgerPostingService: LedgerPostingService,
   ) {}
 
   async getTransactionById(userId: string, transactionId: string) {
@@ -303,12 +305,14 @@ export class TransactionsService {
         .execute();
       const newFromBalance = debitResult.raw[0].balance as string;
 
-      await accountRepo
+      const creditResult = await accountRepo
         .createQueryBuilder()
         .update(Account)
         .set({ balance: () => 'balance + :amount' })
         .where('id = :id', { id: toAccount.id, amount: dto.amount })
+        .returning('balance')
         .execute();
+      const newToBalance = creditResult.raw[0].balance as string;
 
       // 8. Tạo transaction record va idempotency key record
       const transaction = txRepo.create({
@@ -323,6 +327,15 @@ export class TransactionsService {
       });
 
       await txRepo.save(transaction);
+
+      await this.ledgerPostingService.postTransfer(queryRunner.manager, {
+        transactionId: transaction.id,
+        fromAccountId: fromAccount.id,
+        toAccountId: toAccount.id,
+        amount: dto.amount,
+        fromBalanceAfter: newFromBalance,
+        toBalanceAfter: newToBalance,
+      });
 
       // Update the idempotency record with the transaction ID
       idempotency.transactionId = transaction.id;

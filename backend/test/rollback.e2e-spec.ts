@@ -10,6 +10,7 @@ import { Account } from '../src/accounts/entities/account.entity.js';
 import { setupApp } from '../src/app.setup.js';
 import { AppModule } from '../src/app.module.js';
 import { IdempotencyKey } from '../src/transactions/entities/idempotency-key.entity.js';
+import { LedgerEntry } from '../src/transactions/entities/ledger-entry.entity.js';
 import { Transaction, TransactionType } from '../src/transactions/entities/transaction.entity.js';
 import { User } from '../src/users/entities/user.entity.js';
 
@@ -116,6 +117,19 @@ describe('POST /api/transactions/transfer - rollback khi lỗi giữa chừng', 
           userId: senderUserId,
           keyPrefix: 'e2e-%',
         })
+        .execute();
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(LedgerEntry)
+        .where(
+          'transaction_id IN (SELECT id FROM transactions WHERE initiated_by = :userId AND type = :type AND description LIKE :description)',
+          {
+            userId: senderUserId,
+            type: TransactionType.TRANSFER,
+            description: 'E2E transfer: rollback%',
+          },
+        )
         .execute();
       await manager
         .createQueryBuilder()

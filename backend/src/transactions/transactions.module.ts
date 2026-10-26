@@ -10,6 +10,7 @@ import { Transaction } from './entities/transaction.entity.js';
 
 import { TransactionsController } from './transactions.controller.js';
 import { TransactionsService } from './transactions.service.js';
+import { LedgerPostingService } from './services/ledger-posting.service.js';
 
 
 @Module({
@@ -18,6 +19,6 @@ import { TransactionsService } from './transactions.service.js';
     AccountsModule,
   ],
   controllers: [TransactionsController],
-  providers: [TransactionsService],
+  providers: [TransactionsService, LedgerPostingService],
 })
 export class TransactionsModule {}
