@@ -40,6 +40,8 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run typeorm -- migration:run
+      # Test e2e đăng nhập bằng tài khoản mẫu (an@example.com...) nên cần seed trước
+      - run: node dist/database/seed.js
       - run: npm run test:e2e
 
   docker:
