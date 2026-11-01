@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      JWT_SECRET: ci-test-secret
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: bank
+          POSTGRES_PASSWORD: bank_dev_password
+          POSTGRES_DB: banking
+        # Khớp giá trị mặc định trong typeorm.config.ts nên không cần đặt DB_*
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U bank -d banking"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npm run typeorm -- migration:run
+      # Test e2e đăng nhập bằng tài khoản mẫu (an@example.com...) nên cần seed trước
+      - run: node dist/database/seed.js
+      - run: npm run test:e2e
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: backend
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build image backend
+        run: docker build -t banking-backend ./backend
+
+  # TODO(TV5): thêm job frontend (npm ci, lint, build) khi TV4 khởi tạo xong frontend/package.json
