@@ -40,6 +40,8 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run typeorm -- migration:run
+      # Backend và test e2e kết nối bằng bank_app (DB_APP_USER), phải tạo sau migration
+      - run: node dist/database/create-app-user.js
       # Test e2e đăng nhập bằng tài khoản mẫu (an@example.com...) nên cần seed trước
       - run: node dist/database/seed.js
       - run: npm run test:e2e
