@@ -1,3 +1,8 @@
+# Sequence diagram: Chuyển khoản
+
+> Phụ trách: TV3 Nhật. Luồng `POST /api/transactions/transfer`: xác thực, idempotency, khóa tài khoản, ghi sổ cái, commit hoặc rollback.
+
+```mermaid
 sequenceDiagram
     autonumber
     actor Client as Client 
@@ -55,3 +60,4 @@ sequenceDiagram
             end
         end
     end
+```

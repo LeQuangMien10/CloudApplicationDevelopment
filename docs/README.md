@@ -5,4 +5,4 @@
 - [api.md](api.md): danh sách API, định dạng lỗi
 - [adr/](adr/): các quyết định kiến trúc
 - [sequence-dang-nhap.md](sequence-dang-nhap.md): sequence diagram đăng nhập (TV2)
-- Sequence diagram chuyển khoản (TV3): đặt trong thư mục này
+- [sequence-chuyen-tien.md](sequence-chuyen-tien.md): sequence diagram chuyển khoản (TV3)
