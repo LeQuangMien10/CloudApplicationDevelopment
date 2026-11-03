@@ -17,6 +17,24 @@ Prefix: `/api`. Contract đầy đủ xem trên Swagger: `http://localhost:3000/
 
 Các API Phase 1 đã làm xong. Đăng xuất làm ở frontend: xóa token phía client.
 
+## API Phase 2 (dự kiến)
+
+Thiết kế dự kiến để các thành viên làm thống nhất. Người phụ trách được chỉnh khi làm, nhưng phải sửa bảng này và thêm ví dụ request, response trong cùng PR. Yêu cầu chi tiết từng mục (F1 đến F9) xem [phan-cong-cong-viec.md](phan-cong-cong-viec.md).
+
+| Method | Endpoint | Ai gọi | Mô tả | Phụ trách | Tuần | Trạng thái |
+|---|---|---|---|---|---|---|
+| GET | `/api/audit-logs?actorId=&action=&from=&to=&requestId=&page=&limit=` | Auditor, Admin | Tra cứu audit log (F2) | TV2 | 7 | Chưa |
+| PATCH | `/api/operator/accounts/:id/status` | Operator, Admin | Khóa, mở tài khoản ngân hàng, body `{ status: "frozen" \| "active", reason }` (F3) | TV2 | 7 | Chưa |
+| GET | `/api/operator/fraud-flags?status=&page=&limit=` | Operator, Auditor, Admin | Danh sách cảnh báo bất thường (F6) | TV3 | 8 | Chưa |
+| PATCH | `/api/operator/fraud-flags/:id` | Operator, Admin | Xử lý cảnh báo, body `{ status: "confirmed" \| "dismissed", note }` (F6) | TV3 | 8 | Chưa |
+| GET | `/api/reconciliation/reports` | Auditor, Admin | Danh sách báo cáo đối soát (F7) | TV1 | 8 | Chưa |
+| POST | `/api/reconciliation/run` | Admin | Chạy đối soát ngay (F7) | TV1 | 8 | Chưa |
+
+Thay đổi ở API cũ:
+- `GET /api/transactions` có thêm giao dịch `failed` kèm `failureReason` (F4, TV3).
+- Đăng nhập và chuyển khoản có rate limit, vượt thì `429 RATE_LIMITED`. Sai mật khẩu nhiều lần thì tạm khóa đăng nhập (F9, TV2).
+- Operator, Auditor xem được giao dịch của mọi tài khoản. Cách lọc chốt khi làm F1.
+
 ## Xác thực
 
 - Đăng nhập xong, gửi token ở mọi request cần đăng nhập: `Authorization: Bearer <accessToken>`
@@ -153,5 +171,6 @@ Mỗi response có header `X-Request-Id`. Client có thể tự gửi header nà
 | 422 | `CANNOT_LOCK_SELF` | Admin tự khóa chính mình |
 | 422 | `SENDER_ACCOUNT_NOT_ACTIVE`, `TARGET_ACCOUNT_NOT_ACTIVE` | Tài khoản nguồn hoặc đích không ở trạng thái active (TV3) |
 | 422 | `INSUFFICIENT_FUNDS`, `SAME_ACCOUNT` | Vi phạm nghiệp vụ chuyển tiền (TV3) |
+| 429 | `RATE_LIMITED` | Gửi quá nhiều request (Phase 2, TV2) |
 | 500 | `INTERNAL_ERROR` | Lỗi hệ thống, tra log bằng `requestId` |
 | 503 | `DB_UNAVAILABLE` | `/api/health` không kết nối được database (TV5) |

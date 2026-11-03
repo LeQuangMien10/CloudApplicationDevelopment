@@ -60,4 +60,16 @@ Cập nhật bản mới: `git pull && docker compose up -d --build`. Migration 
 
 ## Phase 2
 
-Terraform và script hạ tầng đặt trong thư mục này. Tự động deploy từ CI, giám sát, backup. Tách bước migration khỏi container backend (xem phần Database ở trên).
+Việc của TV5, theo [docs/phan-cong-cong-viec.md](../docs/phan-cong-cong-viec.md):
+
+| Việc | Tuần |
+|---|---|
+| Dockerfile frontend, service frontend trong compose, job CI frontend | 6 |
+| EC2, Caddy HTTPS, cảnh báo ngân sách, tự động deploy khi merge `main` | 6 |
+| Service `worker` trong compose (cùng image backend, chạy `node dist/worker.js`) | 8 |
+| Tách bước migration khỏi container backend, secret ngoài repo | 9 |
+| Backup DB tự động, thử khôi phục và đo thời gian | 9 |
+| Terraform cho phần hạ tầng đang dùng, đặt trong thư mục này | 9 |
+| Dashboard theo 4 golden signals, SLO | 10 |
+| Load test 1×, 5×, 10× bằng k6, kịch bản kill container và khôi phục | 10 |
+| Mô hình chi phí, chi phí mỗi giao dịch | 12 |
