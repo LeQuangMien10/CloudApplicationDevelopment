@@ -1,6 +1,6 @@
 # Database (Phase 1)
 
-PostgreSQL 16. Schema tạo bởi các migration trong `backend/src/database/migrations/`: `InitSchema` tạo bảng, `EnforceTransferLedgerIntegrity` và `RestrictLedgerMutation` thêm trigger và phân quyền bảo vệ sổ cái.
+PostgreSQL 16. Schema tạo bởi các migration trong `backend/src/database/migrations/`: `InitSchema` tạo bảng, `EnforceTransferLedgerIntegrity` và `RestrictLedgerMutation` thêm trigger và phân quyền bảo vệ sổ cái, `AddOperatorAuditorRoles` thêm vai trò operator, auditor (F1 Phase 2).
 
 ```mermaid
 erDiagram
@@ -16,7 +16,7 @@ erDiagram
 
 | Bảng | Cột chính | Ghi chú |
 |---|---|---|
-| `users` | id, full_name, email, password_hash, role, status | role: customer, admin. status: active, locked |
+| `users` | id, full_name, email, password_hash, role, status | role: customer, operator, auditor, admin. status: active, locked. Operator, auditor là nhân viên ngân hàng, không có tài khoản ngân hàng, chỉ tạo bằng seed |
 | `accounts` | id, user_id, account_number, balance, currency, status, is_system, version | status: active, frozen, closed |
 | `transactions` | id, type, status, from_account_id, to_account_id, amount, description, failure_reason, initiated_by, completed_at | type: transfer, deposit. status: processing, completed, failed |
 | `ledger_entries` | id, transaction_id, account_id, direction, amount, balance_after | Sổ cái kép, chỉ thêm dòng |
@@ -55,7 +55,7 @@ Người phụ trách được chỉnh khi làm và cập nhật mục này tron
 
 | Thay đổi | Nội dung | Phụ trách | Tuần |
 |---|---|---|---|
-| Enum `user_role` | Thêm `operator`, `auditor` (`ALTER TYPE user_role ADD VALUE ...`) | TV2 | 7 |
+| Enum `user_role` | **Xong tuần 7:** có `customer`, `operator`, `auditor`, `admin` | TV2 | 7 |
 | Bảng `audit_logs` | id, actor_id, actor_role, action, target_type, target_id, request_id, ip, metadata (jsonb), created_at. **Chỉ thêm dòng** như `ledger_entries` | TV2 | 7 |
 | `users` | Thêm cột đếm số lần đăng nhập sai, thời điểm hết tạm khóa | TV2 | 9 |
 | `transactions` | Bắt đầu dùng trạng thái `failed` kèm `failure_reason` | TV3 | 7 |
