@@ -49,9 +49,24 @@ erDiagram
 - **Migration tạo bảng mới phải tự `GRANT` cho `banking_app`**, nếu không backend sẽ lỗi `permission denied`.
 - Muốn sửa hoặc xóa sổ cái (dọn dữ liệu test, xử lý sự cố) phải dùng user thuộc role `ledger_maintainer` và bật `app.ledger_maintenance` trong transaction. Xem `backend/test/support/owner-data-source.ts`.
 
-## Để dành cho Phase 2
+## Phase 2 (dự kiến)
 
-- Đối soát số dư `accounts.balance` với `balance_after` trong sổ cái
-- Chặn đổi trạng thái giao dịch đã `completed`
-- Bảng `audit_logs`, `fraud_flags`, `reconciliation_reports`
-- Thêm vai trò operator, auditor (`ALTER TYPE user_role ADD VALUE ...`)
+Người phụ trách được chỉnh khi làm và cập nhật mục này trong cùng PR. Yêu cầu chi tiết xem [phan-cong-cong-viec.md](phan-cong-cong-viec.md).
+
+| Thay đổi | Nội dung | Phụ trách | Tuần |
+|---|---|---|---|
+| Enum `user_role` | Thêm `operator`, `auditor` (`ALTER TYPE user_role ADD VALUE ...`) | TV2 | 7 |
+| Bảng `audit_logs` | id, actor_id, actor_role, action, target_type, target_id, request_id, ip, metadata (jsonb), created_at. **Chỉ thêm dòng** như `ledger_entries` | TV2 | 7 |
+| `users` | Thêm cột đếm số lần đăng nhập sai, thời điểm hết tạm khóa | TV2 | 9 |
+| `transactions` | Bắt đầu dùng trạng thái `failed` kèm `failure_reason` | TV3 | 7 |
+| Bảng `outbox_events` | id, event_type, payload (jsonb), status, attempts, available_at, created_at, processed_at | TV3 | 8 |
+| Bảng `fraud_flags` | id, transaction_id, rule_code, score, status (open, confirmed, dismissed), reviewed_by, reviewed_at, note, created_at | TV3 | 8 |
+| Bảng `reconciliation_reports` | id, run_at, status, số tài khoản lệch, chi tiết (jsonb) | TV1 | 8 |
+
+**Quy tắc cho migration Phase 2:**
+- Bảng mới phải `GRANT` cho `banking_app`. Bảng chỉ thêm dòng (`audit_logs`) chỉ cấp `SELECT`, `INSERT`, kèm trigger chặn sửa, xóa.
+- Log và sự kiện của một thao tác ghi trong cùng DB transaction với thao tác đó.
+- Mỗi migration có `down` chạy được. Sau khi thêm migration, chạy `migration:generate --dryrun` phải báo không có thay đổi, tức là entity khớp với migration.
+
+**Còn để sau:**
+- Đối soát bằng code (F7) thay cho kiểm tra tay. Sau khi có F7, chặn thêm việc đổi trạng thái giao dịch đã `completed`.
