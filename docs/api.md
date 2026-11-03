@@ -23,7 +23,7 @@ Thiết kế dự kiến để các thành viên làm thống nhất. Người p
 
 | Method | Endpoint | Ai gọi | Mô tả | Phụ trách | Tuần | Trạng thái |
 |---|---|---|---|---|---|---|
-| GET | `/api/audit-logs?actorId=&action=&from=&to=&requestId=&page=&limit=` | Auditor, Admin | Tra cứu audit log (F2) | TV2 | 7 | Chưa |
+| GET | `/api/audit-logs?actorId=&action=&from=&to=&requestId=&page=&limit=` | Auditor, Admin | Tra cứu audit log (F2) | TV2 | 7 | **Xong** |
 | PATCH | `/api/operator/accounts/:id/status` | Operator, Admin | Khóa, mở tài khoản ngân hàng, body `{ status: "frozen" \| "active", reason }` (F3) | TV2 | 7 | Chưa |
 | GET | `/api/operator/fraud-flags?status=&page=&limit=` | Operator, Auditor, Admin | Danh sách cảnh báo bất thường (F6) | TV3 | 8 | Chưa |
 | PATCH | `/api/operator/fraud-flags/:id` | Operator, Admin | Xử lý cảnh báo, body `{ status: "confirmed" \| "dismissed", note }` (F6) | TV3 | 8 | Chưa |
@@ -56,6 +56,28 @@ getMine(@CurrentUser() user: RequestUser) { // user.id, user.role
 ```
 
 Import từ `src/auth/`: `jwt-auth.guard.js`, `roles.guard.js`, `roles.decorator.js`, `current-user.decorator.js`.
+
+**Ghi audit log trong module của bạn (F2):** import `AuditModule` rồi gọi `AuditService`:
+
+```ts
+// Thao tác có thay đổi dữ liệu: ghi TRONG cùng DB transaction — rollback thì log cũng rollback
+await this.dataSource.transaction(async (manager) => {
+  // ... cập nhật dữ liệu qua manager ...
+  await this.auditService.log(manager, {
+    actorId: actor.id, actorRole: actor.role,
+    action: AuditAction.ACCOUNT_FROZEN,
+    targetType: 'account', targetId: accountId,
+    metadata: { reason },   // KHÔNG chứa mật khẩu, token
+  });
+});
+
+// Không có transaction bao ngoài (vd. đăng nhập thất bại): lỗi ghi log không làm hỏng nghiệp vụ
+await this.auditService.logStandalone({ action: AuditAction.AUTH_LOGIN_FAILED, ... });
+```
+
+`requestId` và `ip` được `AuditService` tự lấy từ request context (AsyncLocalStorage do `RequestIdMiddleware` gắn), không cần truyền tham số. Thêm action mới trong enum `AuditAction` của `src/audit/entities/audit-log.entity.ts`.
+
+Danh sách action hiện có: `auth_register`, `auth_login_success`, `auth_login_failed`, `user_locked`, `user_unlocked`, `account_frozen` (F3), `account_unfrozen` (F3). Nhật bổ sung `transfer_completed`, `transfer_failed` (F4), `fraud_flag_reviewed` (F6); Châu Anh bổ sung `auth_login_locked` (F9).
 
 ## Request và response
 
@@ -99,6 +121,24 @@ Mật khẩu ít nhất 8 ký tự, có cả chữ và số. Email được chuy
 { "status": "locked" }        // hoặc "active"
 // response
 { "id": "<uuid>", "fullName": "...", "email": "...", "role": "customer", "status": "locked" }
+```
+
+**`GET /api/audit-logs?actorId=&action=&from=&to=&requestId=&page=&limit=`** → `200` (F2). Chỉ auditor và admin. `from`, `to` dạng ISO 8601; `limit` tối đa 100; bỏ trống bộ lọc nào thì không lọc theo đó. Mới nhất trước.
+
+```json
+{ "items": [ {
+    "id": "<uuid>",
+    "actorId": "<uuid>",            // null nếu hành động trước khi xác thực (sai email khi đăng nhập)
+    "actorRole": "admin",
+    "action": "user_locked",
+    "targetType": "user",
+    "targetId": "<uuid>",
+    "requestId": "test-req-1",
+    "ip": "127.0.0.1",
+    "metadata": { "newStatus": "locked" },
+    "createdAt": "2026-11-09T10:00:00.000Z"
+  } ],
+  "total": 12, "page": 1, "limit": 20 }
 ```
 
 **`GET /api/accounts/me`** → `200`. Lấy `id` ở đây để làm `fromAccountId` khi chuyển khoản.

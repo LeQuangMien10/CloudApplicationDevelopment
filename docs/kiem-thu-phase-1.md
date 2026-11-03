@@ -74,6 +74,18 @@ Tài khoản mẫu: `an@example.com`, `binh@example.com`, `chi@example.com` (m�
 | 5.3 | Chi đăng nhập lại | Bị từ chối | [ ] | |
 | 5.4 | Customer gọi `GET /api/admin/users` | `403` | [ ] | |
 
+## 5b. Vai trò Operator, Auditor và audit log (F1, F2 — làm bằng Swagger)
+
+| # | Thao tác | Kết quả mong đợi | Đạt | Ghi chú |
+|---|---|---|---|---|
+| 5b.1 | Đăng nhập `operator@bank.local`, `auditor@bank.local` | Thành công, `/auth/me` trả role tương ứng | [ ] | |
+| 5b.2 | Operator, auditor gọi `GET /api/admin/users` | `403` (khóa user chỉ dành cho admin) | [ ] | |
+| 5b.3 | Đăng nhập sai mật khẩu vài lần, auditor gọi `GET /api/audit-logs?action=auth_login_failed` | Có dòng log, `metadata.reason = invalid_credentials`, không chứa mật khẩu | [ ] | |
+| 5b.4 | Đăng nhập đúng, xem `auth_login_success` | Có dòng log kèm `actorId` | [ ] | |
+| 5b.5 | Admin khóa một user, auditor xem audit log | Có dòng `user_locked`, `actorRole = admin` | [ ] | |
+| 5b.6 | Customer gọi `GET /api/audit-logs` | `403` | [ ] | |
+| 5b.7 | Đăng ký user mới, xem audit log theo `requestId` của request đăng ký | Có `auth_register` với `requestId` khớp header `X-Request-Id` | [ ] | |
+
 ## 6. Toàn vẹn dữ liệu và kỹ thuật
 
 Chạy bằng `docker compose exec db psql -U bank -d banking -c "<câu SQL>"`.
@@ -83,6 +95,8 @@ Chạy bằng `docker compose exec db psql -U bank -d banking -c "<câu SQL>"`.
 | 6.1 | `SELECT sum(balance) FROM accounts;` | `0.00` | [ ] | |
 | 6.2 | Mỗi giao dịch có đúng 2 dòng sổ cái: `SELECT count(*) FROM transactions t WHERE (SELECT count(*) FROM ledger_entries l WHERE l.transaction_id = t.id) <> 2;` | `0` | [ ] | |
 | 6.3 | `DELETE FROM ledger_entries;` bằng user `bank` | Bị trigger chặn | [ ] | |
+| 6.4 | `UPDATE audit_logs SET action = 'sua_log';` bằng user `bank` | Bị trigger chặn (append-only, F2) | [ ] | |
+| 6.5 | Đăng nhập backend bằng `bank_app` rồi `UPDATE audit_logs` | Lỗi `permission denied` ngay ở tầng phân quyền | [ ] | |
 | 6.4 | CI trên `main` | Xanh cả 2 job | [ ] | |
 | 6.5 | Trong `backend/`: `npm run test:e2e` | Đạt hết, gồm rollback và chuyển tiền đồng thời | [ ] | |
 
