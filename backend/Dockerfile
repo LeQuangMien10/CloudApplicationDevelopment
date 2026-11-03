@@ -16,5 +16,5 @@ USER node
 EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=5 \
   CMD node -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-# Chạy migration trước, rồi mới start app
-CMD ["sh", "-c", "npm run typeorm -- migration:run && node dist/main"]
+# Chạy migration, tạo/cập nhật DB user cho app (bank_app), rồi mới start app
+CMD ["sh", "-c", "npm run typeorm -- migration:run && node dist/database/create-app-user.js && node dist/main"]

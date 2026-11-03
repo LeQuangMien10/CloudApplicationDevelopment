@@ -3,11 +3,11 @@ import {
   Controller,
   Get,
   Headers,
-  NotImplementedException,
   Param,
   ParseUUIDPipe,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -16,9 +16,12 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { ListTransactionsQuery } from './dto/list-transactions.query.js';
 import { TransferDto } from './dto/transfer.dto.js';
 import { TransactionsService } from './transactions.service.js';
+import { CurrentUser } from '../auth/current-user.decorator.js';
+import type { RequestUser } from '../auth/jwt.strategy.js';
 
 /**
  * Phụ trách: TV3 Nhật
@@ -31,6 +34,7 @@ export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
   @Post('transfer')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Chuyển khoản nội bộ trong 1 DB transaction' })
   @ApiHeader({
     name: 'Idempotency-Key',
@@ -39,36 +43,52 @@ export class TransactionsController {
   })
   @ApiResponse({ status: 201, description: 'COMPLETED' })
   @ApiResponse({
+    status: 400,
+    description:
+      'IDEMPOTENCY_KEY_REQUIRED; VALIDATION_ERROR (sai body hoặc key dài quá 64 ký tự)',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'SENDER_ACCOUNT_NOT_FOUND, TARGET_ACCOUNT_NOT_FOUND',
+  })
+  @ApiResponse({
     status: 409,
     description: 'IDEMPOTENCY_CONFLICT: cùng key nhưng khác nội dung',
   })
   @ApiResponse({
     status: 422,
-    description: 'INSUFFICIENT_FUNDS, ACCOUNT_NOT_ACTIVE, SAME_ACCOUNT, ...',
+    description:
+      'SENDER_ACCOUNT_NOT_ACTIVE, TARGET_ACCOUNT_NOT_ACTIVE, INSUFFICIENT_FUNDS, SAME_ACCOUNT',
   })
   transfer(
     @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @CurrentUser() user: RequestUser,
     @Body() dto: TransferDto,
   ) {
-    // TODO(TV3): xem các bước trong transactions.service.ts
-    void idempotencyKey;
-    void dto;
-    throw new NotImplementedException();
+    return this.transactionsService.transfer(user.id, idempotencyKey, dto);
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Lịch sử giao dịch của tôi: tiền vào, tiền ra, phân trang',
   })
-  list(@Query() query: ListTransactionsQuery) {
-    void query;
-    throw new NotImplementedException();
+  list(
+    @CurrentUser() user: RequestUser,
+    @Query() query: ListTransactionsQuery,
+  ) {
+    return this.transactionsService.getTransactionHistory(user.id, query);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Chi tiết và trạng thái một giao dịch' })
-  getOne(@Param('id', ParseUUIDPipe) id: string) {
-    void id;
-    throw new NotImplementedException();
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Chi tiết và trạng thái một giao dịch',
+  })
+  getOne(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) transactionId: string,
+  ) {
+    return this.transactionsService.getTransactionById(user.id, transactionId);
   }
 }

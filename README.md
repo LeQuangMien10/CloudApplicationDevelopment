@@ -10,7 +10,7 @@ backend/    NestJS + TypeORM + PostgreSQL
 frontend/   React + Vite (TV4 Tú)
 infra/      Docker, CI/CD, cloud (TV5 Hiếu)
 docs/       Kế hoạch, database, API, ADR
-docker-compose.yml   PostgreSQL cho môi trường dev
+docker-compose.yml   PostgreSQL và backend cho môi trường dev
 .env.example         Biến môi trường mẫu
 ```
 
@@ -24,6 +24,7 @@ docker compose up -d db           # PostgreSQL ở cổng 5433
 cd backend
 npm install
 npm run migration:run             # tạo bảng
+npm run db:app-user               # tạo DB user cho backend (bank_app)
 npm run seed                      # dữ liệu mẫu
 npm run start:dev                 # http://localhost:3000/api
 ```
@@ -39,6 +40,24 @@ curl http://localhost:3000/api/health
 ```
 
 Database dev chạy ở cổng **5433** để không trùng với PostgreSQL có thể đã cài sẵn trên máy (cổng 5432). Kết nối bằng DBeaver, pgAdmin: `localhost:5433`, user `bank`, mật khẩu `bank_dev_password`, database `banking`. Muốn đổi cổng thì sửa `DB_PORT` trong `.env`, không cần sửa code.
+
+Backend không dùng user `bank` (owner) khi chạy mà dùng `DB_APP_USER` (mặc định `bank_app`), user này chỉ được `SELECT/INSERT` trên `ledger_entries`. `bank` chỉ dùng cho migration, seed và dọn dữ liệu test.
+
+## Sau khi kéo `main` mới
+
+Khi `main` có thay đổi về thư viện hoặc database, chạy lại trong thư mục `backend`:
+
+```bash
+npm install                # thư viện mới
+npm run migration:run      # bảng, trigger mới
+npm run db:app-user        # tạo hoặc cập nhật user bank_app
+npm run start:dev
+```
+
+- Chạy bằng Docker thì chỉ cần `docker compose up -d --build`, container tự chạy migration và tạo `bank_app`.
+- Lỗi `password authentication failed for user "bank_app"`: chưa chạy `npm run db:app-user`.
+- Lỗi `relation ... does not exist`: chưa chạy `npm run migration:run`.
+- Muốn làm lại DB từ đầu: `npm run db:reset`. Lệnh này **xóa hết dữ liệu**, rồi tự chạy migration, tạo `bank_app` và seed.
 
 Tài khoản mẫu sau khi seed:
 
