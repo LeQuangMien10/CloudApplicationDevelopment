@@ -1,32 +1,44 @@
-import React, { useEffect, useState } from 'react';
-import { api } from '../services/api';
-import { AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { api } from "../services/api";
+import { AlertCircle, ChevronLeft, ChevronRight, History } from "lucide-react";
 
 interface TransactionItem {
   id: string;
-  fromAccountNumber: string;
-  toAccountNumber: string;
-  amount: number;
-  memo: string;
-  status: 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REVERSED';
+  type: "transfer" | "deposit";
+  fromAccountId: string;
+  toAccountId: string;
+  amount: string | number;
+  description?: string;
+  status: string; // "completed", "processing", "failed"
   createdAt: string;
 }
 
 export const HistoryPage: React.FC = () => {
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
+  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const limit = 10;
   const [loading, setLoading] = useState(true);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchHistory = async () => {
       try {
         setLoading(true);
-        // GET /api/transactions?page=&limit=10
-        const res = await api.get(`/transactions?page=${page}&limit=10`);
-        setTransactions(res.data.data || res.data || []);
+        setError(null);
+
+        // Gọi API theo đúng query của ListTransactionsQuery
+        const res = await api.get("/transactions", {
+          params: { page, limit },
+        });
+
+        // Bóc tách đúng key "transactions" và "total" do backend trả về
+        const list = res.data?.transactions || [];
+        setTransactions(Array.isArray(list) ? list : []);
+        setTotal(res.data?.total || 0);
       } catch (err: any) {
-        setNotice('Backend TV3 chưa hoàn thiện endpoint /transactions (501).');
+        setError(err.message || "Không thể tải lịch sử giao dịch");
+        setTransactions([]);
       } finally {
         setLoading(false);
       }
@@ -35,14 +47,52 @@ export const HistoryPage: React.FC = () => {
     fetchHistory();
   }, [page]);
 
+  const totalPages = Math.ceil(total / limit) || 1;
+
+  // Helper hiển thị số tài khoản đích an toàn
+  const getDestinationDisplay = (tx: any) => {
+    // 1. Nếu là nạp tiền
+    if (tx.type === 'deposit') {
+      return <span className="text-emerald-600 font-medium">Tài khoản của tôi</span>;
+    }
+
+    // 2. Nếu có thông tin User của tài khoản đích do Backend trả về
+    const recipientName = tx.toAccount?.user?.fullName;
+    const recipientAccNum = tx.toAccount?.accountNumber;
+
+    if (recipientName) {
+      return (
+        <div>
+          <p className="font-semibold text-slate-800">{recipientName}</p>
+          <p className="text-xs text-slate-400 font-mono">{recipientAccNum || tx.toAccountNumber}</p>
+        </div>
+      );
+    }
+
+    // 3. Fallback nếu chỉ có số tài khoản hoặc ID
+    if (recipientAccNum) return <span className="font-mono">{recipientAccNum}</span>;
+    if (tx.toAccountId) return <span className="font-mono">{tx.toAccountId.slice(0, 8)}...</span>;
+    return '---';
+  };
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-slate-800">Lịch sử giao dịch</h1>
+      <div className="flex items-center gap-3">
+        <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
+          <History size={24} />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">
+            Lịch sử giao dịch
+          </h1>
+          <p className="text-sm text-slate-500">Tổng số: {total} giao dịch</p>
+        </div>
+      </div>
 
-      {notice && (
+      {error && (
         <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-sm">
           <AlertCircle size={20} className="flex-shrink-0 text-amber-600" />
-          <span>{notice}</span>
+          <span>{error}</span>
         </div>
       )}
 
@@ -62,34 +112,58 @@ export const HistoryPage: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-400">Đang tải lịch sử...</td>
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
+                    <span className="inline-block animate-pulse">Đang tải lịch sử giao dịch...</span>
+                  </td>
                 </tr>
               ) : transactions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-400">Chưa có giao dịch nào</td>
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
+                    Chưa có giao dịch nào được ghi nhận
+                  </td>
                 </tr>
               ) : (
-                transactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-slate-50">
-                    <td className="py-3.5 px-4 font-mono text-xs">{tx.id.slice(0, 8)}...</td>
-                    <td className="py-3.5 px-4 font-mono">{tx.toAccountNumber}</td>
-                    <td className="py-3.5 px-4 font-bold text-slate-800">
-                      {new Intl.NumberFormat('vi-VN').format(tx.amount)} đ
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-600">{tx.memo}</td>
-                    <td className="py-3.5 px-4">
-                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        tx.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' :
-                        tx.status === 'PROCESSING' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
-                      }`}>
-                        {tx.status}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-400 text-xs">
-                      {new Date(tx.createdAt).toLocaleString('vi-VN')}
-                    </td>
-                  </tr>
-                ))
+                transactions.map((tx) => {
+                  const isDeposit = tx.type === 'deposit';
+                  const statusUpper = tx.status?.toUpperCase();
+
+                  return (
+                    <tr key={tx.id} className="hover:bg-slate-50 transition">
+                      <td className="py-3.5 px-4 font-mono text-xs text-slate-500">
+                        {tx.id ? `${tx.id.slice(0, 8)}...` : '---'}
+                      </td>
+                      
+                      {/* Cột tài khoản đích */}
+                      <td className="py-3.5 px-4 font-mono text-sm text-slate-700">
+                        {getDestinationDisplay(tx)}
+                      </td>
+
+                      {/* Cột số tiền: Phân biệt Tiền vào (+) xanh lá, Tiền ra (-) đen */}
+                      <td className={`py-3.5 px-4 font-bold ${isDeposit ? 'text-emerald-600' : 'text-slate-900'}`}>
+                        {isDeposit ? '+' : '-'} {new Intl.NumberFormat('vi-VN').format(Number(tx.amount || 0))} đ
+                      </td>
+
+                      <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate">
+                        {tx.description || 'Chuyển tiền'}
+                      </td>
+
+                      {/* Cột trạng thái: Chữ hoa/thường đều khớp màu xanh */}
+                      <td className="py-3.5 px-4">
+                        <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                          statusUpper === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' :
+                          statusUpper === 'PROCESSING' ? 'bg-amber-100 text-amber-800' : 
+                          'bg-rose-100 text-rose-800'
+                        }`}>
+                          {tx.status}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-slate-400 text-xs">
+                        {tx.createdAt ? new Date(tx.createdAt).toLocaleString('vi-VN') : '---'}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -100,15 +174,17 @@ export const HistoryPage: React.FC = () => {
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1 || loading}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50"
+            className="flex items-center gap-1 px-3.5 py-1.5 text-sm font-medium border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
             <ChevronLeft size={16} /> Trang trước
           </button>
-          <span className="text-sm text-slate-600">Trang {page}</span>
+          <span className="text-sm font-medium text-slate-600">
+            Trang {page} / {totalPages}
+          </span>
           <button
             onClick={() => setPage((p) => p + 1)}
-            disabled={loading || transactions.length < 10}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50"
+            disabled={page >= totalPages || loading}
+            className="flex items-center gap-1 px-3.5 py-1.5 text-sm font-medium border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
             Trang sau <ChevronRight size={16} />
           </button>
