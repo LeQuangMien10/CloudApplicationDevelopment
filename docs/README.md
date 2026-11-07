@@ -1,5 +1,7 @@
 # Tài liệu
 
+- [yeu-cau.md](yeu-cau.md): yêu cầu chức năng, phi chức năng, workload, tình huống lỗi
+- [kien-truc.md](kien-truc.md): kiến trúc, module, đồng bộ và bất đồng bộ, xử lý lỗi, triển khai
 - [phan-cong-cong-viec.md](phan-cong-cong-viec.md): các phase, lịch, phân công
 - [database.md](database.md): schema và quy tắc dữ liệu
 - [api.md](api.md): danh sách API, định dạng lỗi
