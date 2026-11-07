@@ -11,6 +11,8 @@ import type { Account } from '../../accounts/entities/account.entity.js';
 
 export enum UserRole {
   CUSTOMER = 'customer',
+  OPERATOR = 'operator',
+  AUDITOR = 'auditor',
   ADMIN = 'admin',
 }
 

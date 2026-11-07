@@ -16,7 +16,7 @@ cp .env.example .env                    # VITE_API_URL=http://localhost:3000/api
 npm ci && npm run dev                   # http://localhost:5173
 ```
 
-Tài khoản mẫu: `an@example.com`, `binh@example.com`, `chi@example.com` (mật khẩu `Password@123`), `admin@bank.local` (`Admin@123`).
+Tài khoản mẫu: `an@example.com`, `binh@example.com`, `chi@example.com` (mật khẩu `Password@123`), `admin@bank.local` (`Admin@123`), `operator@bank.local` và `auditor@bank.local` (mật khẩu `Staff@123`).
 
 | # | Kiểm tra | Kết quả mong đợi | Đạt | Ghi chú |
 |---|---|---|---|---|

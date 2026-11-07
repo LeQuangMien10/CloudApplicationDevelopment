@@ -64,6 +64,8 @@ Tài khoản mẫu sau khi seed:
 | Vai trò | Email | Mật khẩu | Số tài khoản |
 |---|---|---|---|
 | admin | admin@bank.local | Admin@123 | |
+| operator | operator@bank.local | Staff@123 | |
+| auditor | auditor@bank.local | Staff@123 | |
 | customer | an@example.com | Password@123 | 100000000001 (10.000.000) |
 | customer | binh@example.com | Password@123 | 100000000002 (5.000.000) |
 | customer | chi@example.com | Password@123 | 100000000003 (0) |

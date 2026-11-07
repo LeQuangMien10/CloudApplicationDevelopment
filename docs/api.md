@@ -40,6 +40,7 @@ Thay đổi ở API cũ:
 - Đăng nhập xong, gửi token ở mọi request cần đăng nhập: `Authorization: Bearer <accessToken>`
 - Token hết hạn sau 15 phút (`JWT_EXPIRES_IN`), hết hạn thì đăng nhập lại.
 - Mỗi request đều kiểm tra trạng thái user trong DB: user bị khóa thì token đã cấp trước đó cũng bị từ chối ngay (`401 USER_LOCKED`).
+- Vai trò (F1 Phase 2): `customer`, `operator`, `auditor`, `admin`. Role được đọc từ DB ở mỗi request, không lấy từ token, nên đổi role có hiệu lực ngay. Chỉ seed tạo operator/auditor, không ai tự đăng ký được.
 
 **Cho backend, cách bảo vệ một endpoint:**
 
