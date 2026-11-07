@@ -1,6 +1,6 @@
 # Chạy toàn bộ: docker compose up -d --build
 # Chỉ chạy DB để dev backend trên máy: docker compose up -d db
-# TODO(TV5): thêm service frontend khi TV4 khởi tạo xong project
+# Giao diện: http://localhost:8080 (nginx, /api chuyển sang backend)
 services:
   db:
     image: postgres:16-alpine
@@ -37,6 +37,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: banking-frontend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      - backend
     restart: unless-stopped
 
 volumes:

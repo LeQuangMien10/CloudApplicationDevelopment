@@ -8,15 +8,14 @@ Phụ trách: **TV5 Hiếu**.
 |---|---|---|
 | Health check | `backend/src/health/health.controller.ts` | `GET /api/health` trả `{ status: 'ok', db: 'up' }`, DB lỗi thì trả 503 `DB_UNAVAILABLE` |
 | Image backend | `backend/Dockerfile` | Multi-stage, `node:22-slim`. Khi container khởi động sẽ chạy migration, tạo DB user cho app (`create-app-user.js`) rồi mới start app |
-| Chạy local | `docker-compose.yml` | Service `db` và `backend`. Backend chờ DB healthy rồi mới chạy |
-| CI | `.github/workflows/ci.yml` | Mỗi PR vào `main`: lint, unit test, build, migration, e2e (có Postgres), build image Docker |
-
-Còn lại: Dockerfile và job CI cho frontend (chờ TV4 khởi tạo `frontend/`).
+| Image frontend | `frontend/Dockerfile`, `frontend/nginx.conf` | Build bằng Vite, phục vụ bằng nginx. nginx chuyển `/api/` sang `backend:3000`, nên frontend gọi API cùng địa chỉ, không cần CORS và không phải build lại khi IP server đổi |
+| Chạy local | `docker-compose.yml` | Service `db`, `backend`, `frontend`. Backend chờ DB healthy rồi mới chạy |
+| CI | `.github/workflows/ci.yml` | Mỗi PR vào `main`: backend (lint, unit test, build, migration, e2e có Postgres), frontend (lint, build), build image Docker cả hai |
 
 ## Chạy bằng Docker
 
 ```bash
-docker compose up -d --build                              # build và chạy db + backend
+docker compose up -d --build                              # build và chạy db + backend + frontend
 docker compose exec backend node dist/database/seed.js    # seed, chỉ chạy lần đầu
 docker compose logs -f backend                            # xem log
 docker compose down                                       # tắt (giữ dữ liệu)
@@ -47,7 +46,7 @@ Cách làm: một máy ảo Ubuntu chạy `docker compose`, giống như chạy 
    docker compose up -d --build
    docker compose exec backend node dist/database/seed.js
    ```
-5. Kiểm tra: `http://<IP>:3000/api/health` và `http://<IP>:3000/api/docs`.
+5. Kiểm tra: giao diện `http://<IP>:8080`, API `http://<IP>:3000/api/health` và `http://<IP>:3000/api/docs`. Security group mở thêm cổng 8080.
 
 Cập nhật bản mới: `git pull && docker compose up -d --build`. Migration tự chạy khi container khởi động.
 
