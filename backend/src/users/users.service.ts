@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { AuditAction } from '../audit/entities/audit-log.entity.js';
+import { AuditService } from '../audit/audit.service.js';
 import { User, UserStatus } from './entities/user.entity.js';
 
 /** Phụ trách: TV2 Châu Anh */
@@ -8,6 +10,8 @@ import { User, UserStatus } from './entities/user.entity.js';
 export class UsersService {
   constructor(
     @InjectRepository(User) private readonly users: Repository<User>,
+    private readonly dataSource: DataSource,
+    private readonly auditService: AuditService,
   ) {}
 
   /** Lấy cả passwordHash (mặc định cột này bị ẩn) để AuthService kiểm tra mật khẩu. */
@@ -37,9 +41,32 @@ export class UsersService {
     return { items, total, page, limit };
   }
 
-  /** Trả null nếu không có user với id tương ứng. preload() chỉ merge trong memory nên phải save(). */
-  async updateStatus(id: string, status: UserStatus): Promise<User | null> {
-    const user = await this.users.preload({ id, status });
-    return user ? this.users.save(user) : null;
+  /**
+   * Trả null nếu không có user với id tương ứng.
+   * Đổi trạng thái và audit log chạy trong cùng DB transaction: thao tác rollback
+   * thì log cũng rollback, không có log "khóa user" cho một thao tác không thành công.
+   */
+  async updateStatus(
+    id: string,
+    status: UserStatus,
+    actor: { id: string; role: string },
+  ): Promise<User | null> {
+    return this.dataSource.transaction(async (manager) => {
+      const user = await manager.preload(User, { id, status });
+      if (!user) return null;
+      await manager.save(user);
+      await this.auditService.log(manager, {
+        actorId: actor.id,
+        actorRole: actor.role,
+        action:
+          status === UserStatus.LOCKED
+            ? AuditAction.USER_LOCKED
+            : AuditAction.USER_UNLOCKED,
+        targetType: 'user',
+        targetId: id,
+        metadata: { newStatus: status },
+      });
+      return user;
+    });
   }
 }
