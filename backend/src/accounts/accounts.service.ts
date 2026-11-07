@@ -1,17 +1,21 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
+import { AuditAction } from '../audit/entities/audit-log.entity.js';
+import { AuditService } from '../audit/audit.service.js';
 import { AppException } from '../common/exceptions/app.exception.js';
 import { DEFAULT_CURRENCY } from '../common/money.js';
 import { generateAccountNumber } from './account-number.util.js';
-import { Account } from './entities/account.entity.js';
+import { Account, AccountStatus } from './entities/account.entity.js';
 
-/** Phụ trách: TV3 Nhật (đọc tài khoản), TV2 Châu Anh dùng để tạo tài khoản khi đăng ký. */
+/** Phụ trách: TV3 Nhật (đọc tài khoản), TV2 Châu Anh dùng để tạo tài khoản khi đăng ký và khóa/mở (F3). */
 @Injectable()
 export class AccountsService {
   constructor(
     @InjectRepository(Account)
     private readonly accountsRepository: Repository<Account>,
+    private readonly dataSource: DataSource,
+    private readonly auditService: AuditService,
   ) {}
 
   findByUserId(userId: string) {
@@ -70,5 +74,64 @@ export class AccountsService {
       'Không sinh được số tài khoản',
       HttpStatus.INTERNAL_SERVER_ERROR,
     );
+  }
+
+  /**
+   * F3: operator khóa (frozen) hoặc mở (active) tài khoản ngân hàng.
+   * Đổi trạng thái và audit log trong cùng DB transaction. Gọi đúng trạng thái
+   * hiện có thì trả về như cũ, không ghi log trùng (idempotent).
+   * Chuyển khoản đã chặn tài khoản không active từ Phase 1, không cần sửa transfer.
+   */
+  async updateStatus(
+    id: string,
+    status: AccountStatus,
+    reason: string | undefined,
+    actor: { id: string; role: string },
+  ): Promise<{
+    id: string;
+    accountNumber: string;
+    status: AccountStatus;
+    updatedAt: Date;
+  }> {
+    return this.dataSource.transaction(async (manager) => {
+      const account = await manager.findOneBy(Account, { id });
+      if (!account) {
+        throw new AppException(
+          'ACCOUNT_NOT_FOUND',
+          'Không tìm thấy tài khoản',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      if (account.isSystem) {
+        throw new AppException(
+          'CANNOT_MODIFY_SYSTEM_ACCOUNT',
+          'Không thể thay đổi trạng thái tài khoản quỹ của ngân hàng',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+
+      const previousStatus = account.status;
+      if (previousStatus !== status) {
+        account.status = status;
+        await manager.save(account);
+        await this.auditService.log(manager, {
+          actorId: actor.id,
+          actorRole: actor.role,
+          action:
+            status === AccountStatus.FROZEN
+              ? AuditAction.ACCOUNT_FROZEN
+              : AuditAction.ACCOUNT_UNFROZEN,
+          targetType: 'account',
+          targetId: account.accountNumber,
+          metadata: { reason: reason ?? null, previousStatus },
+        });
+      }
+      return {
+        id: account.id,
+        accountNumber: account.accountNumber,
+        status: account.status,
+        updatedAt: account.updatedAt,
+      };
+    });
   }
 }

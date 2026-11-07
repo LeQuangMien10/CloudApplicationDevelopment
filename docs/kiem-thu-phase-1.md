@@ -86,6 +86,19 @@ Tài khoản mẫu: `an@example.com`, `binh@example.com`, `chi@example.com` (m�
 | 5b.6 | Customer gọi `GET /api/audit-logs` | `403` | [ ] | |
 | 5b.7 | Đăng ký user mới, xem audit log theo `requestId` của request đăng ký | Có `auth_register` với `requestId` khớp header `X-Request-Id` | [ ] | |
 
+## 5c. Operator khóa, mở tài khoản ngân hàng (F3 — làm bằng Swagger)
+
+| # | Thao tác | Kết quả mong đợi | Đạt | Ghi chú |
+|---|---|---|---|---|
+| 5c.1 | Operator `PATCH /api/operator/accounts/:id/status` khóa tài khoản của An (có reason) | `200`, `status = frozen` | [ ] | |
+| 5c.2 | An đăng nhập, xem số dư | Vẫn xem được (khác khóa user) | [ ] | |
+| 5c.3 | An chuyển đi và nhận một khoản chuyển vào | Đều `422 SENDER/TARGET_ACCOUNT_NOT_ACTIVE` | [ ] | |
+| 5c.4 | Operator mở lại tài khoản, An chuyển khoản | Chuyển bình thường | [ ] | |
+| 5c.5 | Khóa không có `reason` | `400 VALIDATION_ERROR` | [ ] | |
+| 5c.6 | Khóa tài khoản quỹ `000000000000` | `422 CANNOT_MODIFY_SYSTEM_ACCOUNT` | [ ] | |
+| 5c.7 | Customer và auditor gọi API này | `403` | [ ] | |
+| 5c.8 | Auditor xem audit log sau khi khóa/mở | Có `account_frozen` và `account_unfrozen` kèm `reason` | [ ] | |
+
 ## 6. Toàn vẹn dữ liệu và kỹ thuật
 
 Chạy bằng `docker compose exec db psql -U bank -d banking -c "<câu SQL>"`.
