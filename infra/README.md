@@ -7,7 +7,7 @@ Phụ trách: **TV5 Hiếu**.
 | Thành phần | File | Ghi chú |
 |---|---|---|
 | Health check | `backend/src/health/health.controller.ts` | `GET /api/health` trả `{ status: 'ok', db: 'up' }`, DB lỗi thì trả 503 `DB_UNAVAILABLE` |
-| Image backend | `backend/Dockerfile` | Multi-stage, `node:22-slim`. Khi container khởi động sẽ chạy migration rồi mới start app |
+| Image backend | `backend/Dockerfile` | Multi-stage, `node:22-slim`. Khi container khởi động sẽ chạy migration, tạo DB user cho app (`create-app-user.js`) rồi mới start app |
 | Chạy local | `docker-compose.yml` | Service `db` và `backend`. Backend chờ DB healthy rồi mới chạy |
 | CI | `.github/workflows/ci.yml` | Mỗi PR vào `main`: lint, unit test, build, migration, e2e (có Postgres), build image Docker |
 
@@ -41,7 +41,7 @@ Cách làm: một máy ảo Ubuntu chạy `docker compose`, giống như chạy 
    cd CloudApplicationDevelopment
    cp .env.example .env
    ```
-   Bắt buộc đổi trong `.env`: `DB_PASSWORD` (mật khẩu mạnh), `JWT_SECRET` (`openssl rand -hex 32`), `CORS_ORIGIN` (URL frontend).
+   Bắt buộc đổi trong `.env`: `DB_PASSWORD` và `DB_APP_PASSWORD` (hai mật khẩu mạnh, khác nhau), `JWT_SECRET` (`openssl rand -hex 32`), `CORS_ORIGIN` (URL frontend).
 4. Chạy và seed:
    ```bash
    docker compose up -d --build
@@ -51,6 +51,25 @@ Cách làm: một máy ảo Ubuntu chạy `docker compose`, giống như chạy 
 
 Cập nhật bản mới: `git pull && docker compose up -d --build`. Migration tự chạy khi container khởi động.
 
+## Database: user owner và user app
+
+- Backend chạy bằng `DB_APP_USER` (mặc định `bank_app`, thuộc role `banking_app`), chỉ được `SELECT/INSERT` trên `ledger_entries`. `DB_USER` là owner, dùng cho migration, seed và tạo `DB_APP_USER`
+- Docker tự tạo hoặc cập nhật mật khẩu `DB_APP_USER` mỗi lần container khởi động. Chạy backend trực tiếp trên máy thì chạy `npm run db:app-user` sau `npm run migration:run`
+- Migration tạo bảng mới phải tự `GRANT` cho role `banking_app`, nếu không backend sẽ bị `permission denied`
+- Hiện container backend vẫn giữ cả credential owner vì phải tự chạy migration. Tách riêng bước migration để container app chỉ nhận `DB_APP_USER/DB_APP_PASSWORD` là việc của Phase 2
+
 ## Phase 2
 
-Terraform và script hạ tầng đặt trong thư mục này. Tự động deploy từ CI, giám sát, backup.
+Việc của TV5, theo [docs/phan-cong-cong-viec.md](../docs/phan-cong-cong-viec.md):
+
+| Việc | Tuần |
+|---|---|
+| Dockerfile frontend, service frontend trong compose, job CI frontend | 6 |
+| EC2, Caddy HTTPS, cảnh báo ngân sách, tự động deploy khi merge `main` | 6 |
+| Service `worker` trong compose (cùng image backend, chạy `node dist/worker.js`) | 8 |
+| Tách bước migration khỏi container backend, secret ngoài repo | 9 |
+| Backup DB tự động, thử khôi phục và đo thời gian | 9 |
+| Terraform cho phần hạ tầng đang dùng, đặt trong thư mục này | 9 |
+| Dashboard theo 4 golden signals, SLO | 10 |
+| Load test 1×, 5×, 10× bằng k6, kịch bản kill container và khôi phục | 10 |
+| Mô hình chi phí, chi phí mỗi giao dịch | 12 |

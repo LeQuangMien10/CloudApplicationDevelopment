@@ -3,6 +3,8 @@ import { JwtService } from '@nestjs/jwt';
 import { compare, hash } from 'bcrypt';
 import { DataSource, EntityManager } from 'typeorm';
 import { AccountsService } from '../accounts/accounts.service.js';
+import { AuditAction } from '../audit/entities/audit-log.entity.js';
+import { AuditService } from '../audit/audit.service.js';
 import { AppException } from '../common/exceptions/app.exception.js';
 import { User, UserRole, UserStatus } from '../users/entities/user.entity.js';
 import { UsersService } from '../users/users.service.js';
@@ -21,12 +23,14 @@ describe('AuthService', () => {
       cb(manager),
     ),
   };
+  const auditService = { log: vi.fn(), logStandalone: vi.fn() };
 
   const service = new AuthService(
     dataSource as unknown as DataSource,
     accountsService as unknown as AccountsService,
     usersService as unknown as UsersService,
     jwtService as unknown as JwtService,
+    auditService as unknown as AuditService,
   );
 
   const dto: RegisterDto = {
@@ -59,6 +63,15 @@ describe('AuthService', () => {
         manager,
         'user-1',
       );
+      // audit log ghi trong cùng transaction với thao tác tạo user
+      expect(auditService.log).toHaveBeenCalledWith(manager, {
+        actorId: 'user-1',
+        actorRole: 'customer',
+        action: AuditAction.AUTH_REGISTER,
+        targetType: 'user',
+        targetId: 'user-1',
+        metadata: { accountNumber: '123456789012' },
+      });
       expect(res).toEqual({
         id: 'user-1',
         fullName: 'Test User',
@@ -118,6 +131,12 @@ describe('AuthService', () => {
         sub: 'u1',
         role: 'customer',
       });
+      expect(auditService.logStandalone).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 'u1',
+          action: AuditAction.AUTH_LOGIN_SUCCESS,
+        }),
+      );
       expect(res).toEqual({ accessToken: 'token-abc', expiresIn: 900 });
     });
 
@@ -135,6 +154,15 @@ describe('AuthService', () => {
       expect(err).toBeInstanceOf(AppException);
       expect(err.code).toBe('INVALID_CREDENTIALS');
       expect(err.getStatus()).toBe(HttpStatus.UNAUTHORIZED);
+      expect(auditService.logStandalone).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 'u1',
+          action: AuditAction.AUTH_LOGIN_FAILED,
+          metadata: expect.objectContaining({
+            reason: 'invalid_credentials',
+          }),
+        }),
+      );
     });
 
     it('email không tồn tại -> INVALID_CREDENTIALS, vẫn so hash giả (chống timing attack)', async () => {
@@ -150,6 +178,13 @@ describe('AuthService', () => {
 
       expect(err.code).toBe('INVALID_CREDENTIALS');
       expect(vi.mocked(compare)).toHaveBeenCalledTimes(1);
+      // email không tồn tại: actorId null, vẫn ghi log thử nghiệm
+      expect(auditService.logStandalone).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: null,
+          action: AuditAction.AUTH_LOGIN_FAILED,
+        }),
+      );
     });
 
     it('user bị khóa -> 401 USER_LOCKED', async () => {
@@ -169,6 +204,13 @@ describe('AuthService', () => {
       expect(err.code).toBe('USER_LOCKED');
       expect(err.getStatus()).toBe(HttpStatus.UNAUTHORIZED);
       expect(jwtService.signAsync).not.toHaveBeenCalled();
+      expect(auditService.logStandalone).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 'u1',
+          action: AuditAction.AUTH_LOGIN_FAILED,
+          metadata: expect.objectContaining({ reason: 'user_locked' }),
+        }),
+      );
     });
   });
 });

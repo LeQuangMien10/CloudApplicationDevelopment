@@ -45,6 +45,21 @@ const CUSTOMERS = [
 ];
 const CUSTOMER_PASSWORD = 'Password@123';
 
+/** Nhân viên ngân hàng: không có tài khoản ngân hàng, phân quyền theo vai trò. */
+const STAFF = [
+  {
+    fullName: 'Nhân viên vận hành',
+    email: 'operator@bank.local',
+    role: UserRole.OPERATOR,
+  },
+  {
+    fullName: 'Kiểm toán viên',
+    email: 'auditor@bank.local',
+    role: UserRole.AUDITOR,
+  },
+];
+const STAFF_PASSWORD = 'Staff@123';
+
 /** Cộng/trừ số dư bằng SQL (không tính bằng number trong JS), trả về số dư mới. */
 async function changeBalance(
   m: EntityManager,
@@ -106,7 +121,9 @@ async function deposit(
 }
 
 async function main() {
-  const ds = await new DataSource(buildDataSourceOptions()).initialize();
+  const ds = await new DataSource(
+    buildDataSourceOptions(process.env, 'owner'),
+  ).initialize();
   try {
     if ((await ds.getRepository(User).count()) > 0) {
       console.log(
@@ -150,6 +167,18 @@ async function main() {
         if (Number(c.deposit) > 0)
           await deposit(m, system, account, c.deposit, admin.id);
       }
+
+      const staffHash = await bcrypt.hash(STAFF_PASSWORD, 12);
+      for (const s of STAFF) {
+        await m.save(
+          m.create(User, {
+            fullName: s.fullName,
+            email: s.email,
+            passwordHash: staffHash,
+            role: s.role,
+          }),
+        );
+      }
     });
 
     console.log('Seed xong:');
@@ -158,6 +187,8 @@ async function main() {
       console.log(
         `  customer ${c.email} / ${CUSTOMER_PASSWORD}  STK ${c.accountNumber}  số dư ${c.deposit}`,
       );
+    for (const s of STAFF)
+      console.log(`  ${s.role}    ${s.email} / ${STAFF_PASSWORD}`);
   } finally {
     await ds.destroy();
   }

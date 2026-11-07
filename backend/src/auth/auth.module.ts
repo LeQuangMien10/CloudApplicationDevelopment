@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import type { StringValue } from 'ms';
 import { AccountsModule } from '../accounts/accounts.module.js';
+import { AuditModule } from '../audit/audit.module.js';
 import { UsersModule } from '../users/users.module.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
@@ -13,6 +14,7 @@ import { JwtStrategy } from './jwt.strategy.js';
   imports: [
     UsersModule,
     AccountsModule,
+    AuditModule,
     PassportModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
