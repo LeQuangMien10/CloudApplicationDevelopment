@@ -102,7 +102,11 @@ export class TransactionsService {
     // 2. Build QueryBuilder
     const queryBuilder = this.txRepo
       .createQueryBuilder('tx')
-      .where('(tx.fromAccount = :accountId OR tx.toAccount = :accountId)', {
+      .leftJoinAndSelect('tx.fromAccount', 'fromAccount')
+      .leftJoinAndSelect('fromAccount.user', 'fromUser')
+      .leftJoinAndSelect('tx.toAccount', 'toAccount')
+      .leftJoinAndSelect('toAccount.user', 'toUser')
+      .where('(tx.fromAccountId = :accountId OR tx.toAccountId = :accountId)', {
         accountId: targetAccountId,
       });
 

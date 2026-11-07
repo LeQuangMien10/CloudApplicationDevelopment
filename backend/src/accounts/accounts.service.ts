@@ -71,4 +71,30 @@ export class AccountsService {
       HttpStatus.INTERNAL_SERVER_ERROR,
     );
   }
+
+  /**
+   * Tra cứu thông tin người thụ hưởng theo số tài khoản (12 chữ số)
+   */
+  async lookupByAccountNumber(accountNumber: string) {
+    const account = await this.accountsRepository.findOne({
+      where: { accountNumber },
+      relations: {
+        user: true,
+      },
+    });
+
+    if (!account) {
+      throw new AppException(
+        'TARGET_ACCOUNT_NOT_FOUND',
+        'Số tài khoản thụ hưởng không tồn tại',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return {
+      accountNumber: account.accountNumber,
+      accountHolderName: account.user?.fullName?.toUpperCase() || 'CHỦ TÀI KHOẢN',
+      status: account.status,
+    };
+  }
 }
