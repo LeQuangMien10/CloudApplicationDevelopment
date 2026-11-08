@@ -1,10 +1,11 @@
 # Database (Phase 1)
 
-PostgreSQL 16. Schema tạo bởi các migration trong `backend/src/database/migrations/`: `InitSchema` tạo bảng, `EnforceTransferLedgerIntegrity` và `RestrictLedgerMutation` thêm trigger và phân quyền bảo vệ sổ cái.
+PostgreSQL 16. Schema tạo bởi các migration trong `backend/src/database/migrations/`: `InitSchema` tạo bảng, `EnforceTransferLedgerIntegrity` và `RestrictLedgerMutation` thêm trigger và phân quyền bảo vệ sổ cái, `AddOperatorAuditorRoles` thêm vai trò operator, auditor (F1 Phase 2).
 
 ```mermaid
 erDiagram
   users ||--o{ accounts : "sở hữu"
+  users ||--o{ audit_logs : "tác nhân"
   accounts ||--o{ transactions : "gửi / nhận"
   transactions ||--|{ ledger_entries : "2 bút toán"
   accounts ||--o{ ledger_entries : ""
@@ -16,11 +17,12 @@ erDiagram
 
 | Bảng | Cột chính | Ghi chú |
 |---|---|---|
-| `users` | id, full_name, email, password_hash, role, status | role: customer, admin. status: active, locked |
+| `users` | id, full_name, email, password_hash, role, status | role: customer, operator, auditor, admin. status: active, locked. Operator, auditor là nhân viên ngân hàng, không có tài khoản ngân hàng, chỉ tạo bằng seed |
 | `accounts` | id, user_id, account_number, balance, currency, status, is_system, version | status: active, frozen, closed |
 | `transactions` | id, type, status, from_account_id, to_account_id, amount, description, failure_reason, initiated_by, completed_at | type: transfer, deposit. status: processing, completed, failed |
 | `ledger_entries` | id, transaction_id, account_id, direction, amount, balance_after | Sổ cái kép, chỉ thêm dòng |
 | `idempotency_keys` | (user_id, key), request_hash, transaction_id, response_code, response_body, expires_at | Chống gửi trùng |
+| `audit_logs` | id, actor_id, actor_role, action, target_type, target_id, request_id, ip, metadata (jsonb), created_at | Nhật ký kiểm toán (F2). **Chỉ thêm dòng**, xem chi tiết bên dưới |
 
 ## Quy tắc quan trọng
 
@@ -37,6 +39,14 @@ erDiagram
 - **Sổ cái chỉ thêm dòng (TV3):**
   - Trigger chặn `UPDATE`, `DELETE`, `TRUNCATE` trên `ledger_entries`.
   - Trigger kiểm tra lúc commit: giao dịch transfer `completed` phải có đúng 1 dòng debit, 1 dòng credit, đúng số tiền và đúng tài khoản. Sai thì cả transaction bị hủy.
+- **Khóa tài khoản ngân hàng (TV2, F3):** operator khóa (`frozen`) khi nghi ngờ gian lận — user vẫn đăng nhập, xem số dư được, nhưng không chuyển đi và không nhận tiền (transfer chặn sẵn mọi trạng thái khác `active`). Chỉ nhận `frozen`/`active` qua API, tài khoản quỹ `000000000000` không đổi được, tài khoản đã `closed` là trạng thái cuối (`ACCOUNT_CLOSED`), `reason` bắt buộc khi khóa, và mọi thao tác ghi audit log trong cùng DB transaction. Trạng thái đọc với khóa dòng `pessimistic_write` nên hai operator đổi cùng lúc không sinh log trùng.
+- **Audit log chỉ thêm dòng (TV2, F2):**
+  - `banking_app` chỉ có `SELECT`, `INSERT` trên `audit_logs`; `PUBLIC` bị `REVOKE ALL`.
+  - Trigger chặn `UPDATE`, `DELETE`, `TRUNCATE` kể cả với owner, trừ khi thành viên role `audit_maintainer` bật `app.audit_maintenance` trong transaction.
+  - `request_id` là varchar(64) vì `RequestIdMiddleware` chấp nhận header `X-Request-Id` do client gửi; khi ghi log ngoài request (worker) giá trị là `no-request-context`.
+  - Log của thao tác có thay đổi dữ liệu (khóa/mở user, đăng ký) ghi **trong cùng DB transaction** với thao tác đó; đăng nhập thành công/thất bại không có transaction bao ngoài nên ghi độc lập.
+  - Không bao giờ ghi mật khẩu, token vào `metadata`.
+  - Thêm action mới không cần migration (cột varchar), đặt trong enum `AuditAction` của `audit-log.entity.ts`.
 
 ## User database
 
@@ -55,8 +65,8 @@ Người phụ trách được chỉnh khi làm và cập nhật mục này tron
 
 | Thay đổi | Nội dung | Phụ trách | Tuần |
 |---|---|---|---|
-| Enum `user_role` | Thêm `operator`, `auditor` (`ALTER TYPE user_role ADD VALUE ...`) | TV2 | 7 |
-| Bảng `audit_logs` | id, actor_id, actor_role, action, target_type, target_id, request_id, ip, metadata (jsonb), created_at. **Chỉ thêm dòng** như `ledger_entries` | TV2 | 7 |
+| Enum `user_role` | **Xong tuần 7:** có `customer`, `operator`, `auditor`, `admin` | TV2 | 7 |
+| Bảng `audit_logs` | **Xong tuần 7:** xem mục "Audit log chỉ thêm dòng" ở trên | TV2 | 7 |
 | `users` | Thêm cột đếm số lần đăng nhập sai, thời điểm hết tạm khóa | TV2 | 9 |
 | `transactions` | Bắt đầu dùng trạng thái `failed` kèm `failure_reason` | TV3 | 7 |
 | Bảng `outbox_events` | id, event_type, payload (jsonb), status, attempts, available_at, created_at, processed_at | TV3 | 8 |

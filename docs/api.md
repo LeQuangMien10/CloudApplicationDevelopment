@@ -23,8 +23,8 @@ Thiết kế dự kiến để các thành viên làm thống nhất. Người p
 
 | Method | Endpoint | Ai gọi | Mô tả | Phụ trách | Tuần | Trạng thái |
 |---|---|---|---|---|---|---|
-| GET | `/api/audit-logs?actorId=&action=&from=&to=&requestId=&page=&limit=` | Auditor, Admin | Tra cứu audit log (F2) | TV2 | 7 | Chưa |
-| PATCH | `/api/operator/accounts/:id/status` | Operator, Admin | Khóa, mở tài khoản ngân hàng, body `{ status: "frozen" \| "active", reason }` (F3) | TV2 | 7 | Chưa |
+| GET | `/api/audit-logs?actorId=&action=&from=&to=&requestId=&page=&limit=` | Auditor, Admin | Tra cứu audit log (F2) | TV2 | 7 | **Xong** |
+| PATCH | `/api/operator/accounts/:id/status` | Operator, Admin | Khóa, mở tài khoản ngân hàng, body `{ status: "frozen" \| "active", reason }` (F3) | TV2 | 7 | **Xong** |
 | GET | `/api/operator/fraud-flags?status=&page=&limit=` | Operator, Auditor, Admin | Danh sách cảnh báo bất thường (F6) | TV3 | 8 | Chưa |
 | PATCH | `/api/operator/fraud-flags/:id` | Operator, Admin | Xử lý cảnh báo, body `{ status: "confirmed" \| "dismissed", note }` (F6) | TV3 | 8 | Chưa |
 | GET | `/api/reconciliation/reports` | Auditor, Admin | Danh sách báo cáo đối soát (F7) | TV1 | 8 | Chưa |
@@ -40,6 +40,7 @@ Thay đổi ở API cũ:
 - Đăng nhập xong, gửi token ở mọi request cần đăng nhập: `Authorization: Bearer <accessToken>`
 - Token hết hạn sau 15 phút (`JWT_EXPIRES_IN`), hết hạn thì đăng nhập lại.
 - Mỗi request đều kiểm tra trạng thái user trong DB: user bị khóa thì token đã cấp trước đó cũng bị từ chối ngay (`401 USER_LOCKED`).
+- Vai trò (F1 Phase 2): `customer`, `operator`, `auditor`, `admin`. Role được đọc từ DB ở mỗi request, không lấy từ token, nên đổi role có hiệu lực ngay. Chỉ seed tạo operator/auditor, không ai tự đăng ký được.
 
 **Cho backend, cách bảo vệ một endpoint:**
 
@@ -55,6 +56,28 @@ getMine(@CurrentUser() user: RequestUser) { // user.id, user.role
 ```
 
 Import từ `src/auth/`: `jwt-auth.guard.js`, `roles.guard.js`, `roles.decorator.js`, `current-user.decorator.js`.
+
+**Ghi audit log trong module của bạn (F2):** import `AuditModule` rồi gọi `AuditService`:
+
+```ts
+// Thao tác có thay đổi dữ liệu: ghi TRONG cùng DB transaction — rollback thì log cũng rollback
+await this.dataSource.transaction(async (manager) => {
+  // ... cập nhật dữ liệu qua manager ...
+  await this.auditService.log(manager, {
+    actorId: actor.id, actorRole: actor.role,
+    action: AuditAction.ACCOUNT_FROZEN,
+    targetType: 'account', targetId: accountId,
+    metadata: { reason },   // KHÔNG chứa mật khẩu, token
+  });
+});
+
+// Không có transaction bao ngoài (vd. đăng nhập thất bại): lỗi ghi log không làm hỏng nghiệp vụ
+await this.auditService.logStandalone({ action: AuditAction.AUTH_LOGIN_FAILED, ... });
+```
+
+`requestId` và `ip` được `AuditService` tự lấy từ request context (AsyncLocalStorage do `RequestIdMiddleware` gắn), không cần truyền tham số. Thêm action mới trong enum `AuditAction` của `src/audit/entities/audit-log.entity.ts`.
+
+Danh sách action hiện có: `auth_register`, `auth_login_success`, `auth_login_failed`, `user_locked`, `user_unlocked`, `account_frozen` (F3), `account_unfrozen` (F3). Nhật bổ sung `transfer_completed`, `transfer_failed` (F4), `fraud_flag_reviewed` (F6); Châu Anh bổ sung `auth_login_locked` (F9).
 
 ## Request và response
 
@@ -100,10 +123,37 @@ Mật khẩu ít nhất 8 ký tự, có cả chữ và số. Email được chuy
 { "id": "<uuid>", "fullName": "...", "email": "...", "role": "customer", "status": "locked" }
 ```
 
+**`GET /api/audit-logs?actorId=&action=&from=&to=&requestId=&page=&limit=`** → `200` (F2). Chỉ auditor và admin. `from`, `to` dạng ISO 8601; `limit` tối đa 100; bỏ trống bộ lọc nào thì không lọc theo đó. Mới nhất trước.
+
+```json
+{ "items": [ {
+    "id": "<uuid>",
+    "actorId": "<uuid>",            // null nếu hành động trước khi xác thực (sai email khi đăng nhập)
+    "actorRole": "admin",
+    "action": "user_locked",
+    "targetType": "user",
+    "targetId": "<uuid>",
+    "requestId": "test-req-1",
+    "ip": "127.0.0.1",
+    "metadata": { "newStatus": "locked" },
+    "createdAt": "2026-11-09T10:00:00.000Z"
+  } ],
+  "total": 12, "page": 1, "limit": 20 }
+```
+
 **`GET /api/accounts/me`** → `200`. Lấy `id` ở đây để làm `fromAccountId` khi chuyển khoản.
 
 ```json
 [ { "id": "<uuid>", "accountNumber": "100000000001", "balance": "10000000.00", "currency": "VND", "status": "active" } ]
+```
+
+**`PATCH /api/operator/accounts/:id/status`** → `200` (F3). Operator khóa tài khoản khi nghi ngờ gian lận: user vẫn đăng nhập và xem số dư, nhưng tài khoản không chuyển đi và không nhận tiền được (`422 SENDER/TARGET_ACCOUNT_NOT_ACTIVE`). `reason` bắt buộc khi `status = "frozen"`. Tài khoản quỹ `000000000000` không đổi được; tài khoản đã `closed` là trạng thái cuối (`422 ACCOUNT_CLOSED`). Gọi đúng trạng thái hiện có vẫn `200`, không ghi log trùng.
+
+```json
+// request
+{ "status": "frozen", "reason": "Nghi ngờ gian lận, chờ điều tra" }
+// response
+{ "id": "<uuid>", "accountNumber": "100000000001", "status": "frozen", "updatedAt": "..." }
 ```
 
 **`POST /api/transactions/transfer`** → `201`
@@ -162,13 +212,15 @@ Mỗi response có header `X-Request-Id`. Client có thể tự gửi header nà
 | 401 | `USER_LOCKED` | User bị khóa, kể cả khi dùng token cấp trước đó |
 | 403 | `FORBIDDEN` | Đã đăng nhập nhưng không đủ quyền |
 | 404 | `USER_NOT_FOUND` | Admin thao tác trên user không tồn tại |
-| 404 | `ACCOUNT_NOT_FOUND` | Xem lịch sử giao dịch của tài khoản không tồn tại hoặc không thuộc mình (TV3) |
+| 404 | `ACCOUNT_NOT_FOUND` | Lịch sử giao dịch của tài khoản không tồn tại hoặc không thuộc mình (TV3); operator khóa tài khoản không tồn tại (F3) |
 | 404 | `SENDER_ACCOUNT_NOT_FOUND` | Tài khoản nguồn không tồn tại hoặc không thuộc user đang đăng nhập (TV3) |
 | 404 | `TARGET_ACCOUNT_NOT_FOUND` | Không có tài khoản đích với số tài khoản đã gửi (TV3) |
 | 404 | `TRANSACTION_NOT_FOUND` | Giao dịch không tồn tại, hoặc không phải giao dịch của mình (TV3) |
 | 409 | `EMAIL_ALREADY_EXISTS` | Đăng ký trùng email |
 | 409 | `IDEMPOTENCY_CONFLICT` | Cùng Idempotency-Key nhưng khác nội dung (TV3) |
 | 422 | `CANNOT_LOCK_SELF` | Admin tự khóa chính mình |
+| 422 | `CANNOT_MODIFY_SYSTEM_ACCOUNT` | Operator/admin cố đổi trạng thái tài khoản quỹ `000000000000` (F3) |
+| 422 | `ACCOUNT_CLOSED` | Tài khoản đã đóng là trạng thái cuối, không khóa/mở lại được (F3) |
 | 422 | `SENDER_ACCOUNT_NOT_ACTIVE`, `TARGET_ACCOUNT_NOT_ACTIVE` | Tài khoản nguồn hoặc đích không ở trạng thái active (TV3) |
 | 422 | `INSUFFICIENT_FUNDS`, `SAME_ACCOUNT` | Vi phạm nghiệp vụ chuyển tiền (TV3) |
 | 429 | `RATE_LIMITED` | Gửi quá nhiều request (Phase 2, TV2) |

@@ -1,6 +1,7 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
+import { runWithRequestContext } from '../request-context.js';
 
 export const REQUEST_ID_HEADER = 'x-request-id';
 
@@ -13,7 +14,8 @@ export class RequestIdMiddleware implements NestMiddleware {
       incoming && incoming.length <= 64 ? incoming : randomUUID();
     req.requestId = requestId;
     res.setHeader(REQUEST_ID_HEADER, requestId);
-    next();
+    // Bọc next() trong AsyncLocalStorage để AuditService đọc requestId/ip ở bất cứ tầng nào
+    runWithRequestContext({ requestId, ip: req.ip }, next);
   }
 }
 

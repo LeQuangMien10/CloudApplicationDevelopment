@@ -3,6 +3,8 @@ import { JwtService } from '@nestjs/jwt';
 import { compare, hash } from 'bcrypt';
 import { DataSource } from 'typeorm';
 import { AccountsService } from '../accounts/accounts.service.js';
+import { AuditAction } from '../audit/entities/audit-log.entity.js';
+import { AuditService } from '../audit/audit.service.js';
 import { isUniqueViolation } from '../common/db-errors.js';
 import { AppException } from '../common/exceptions/app.exception.js';
 import { User, UserStatus } from '../users/entities/user.entity.js';
@@ -27,6 +29,8 @@ const DUMMY_HASH =
 /** Phụ trách: TV2 Châu Anh
  * - register(): hash bcrypt, tạo User + Account trong 1 DB transaction
  * - login(): so khớp mật khẩu, kiểm tra trạng thái, ký JWT { sub, role }
+ * Mọi luồng đều ghi audit log (F2): register và khóa/mở user trong cùng transaction,
+ * đăng nhập thất bại/thành công ghi độc lập vì không có transaction bao ngoài.
  */
 @Injectable()
 export class AuthService {
@@ -35,6 +39,7 @@ export class AuthService {
     private readonly accountsService: AccountsService,
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly auditService: AuditService,
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {
@@ -54,6 +59,15 @@ export class AuthService {
           manager,
           userId,
         );
+
+        await this.auditService.log(manager, {
+          actorId: userId,
+          actorRole: 'customer',
+          action: AuditAction.AUTH_REGISTER,
+          targetType: 'user',
+          targetId: userId,
+          metadata: { accountNumber: account.accountNumber },
+        });
 
         return {
           id: userId,
@@ -84,6 +98,15 @@ export class AuthService {
       user?.passwordHash ?? DUMMY_HASH,
     );
     if (!user || !passwordOk) {
+      // actorId null khi email không tồn tại; không bao giờ ghi mật khẩu vào metadata
+      await this.auditService.logStandalone({
+        actorId: user?.id ?? null,
+        actorRole: user?.role ?? null,
+        action: AuditAction.AUTH_LOGIN_FAILED,
+        targetType: 'user',
+        targetId: user?.id ?? null,
+        metadata: { email: dto.email, reason: 'invalid_credentials' },
+      });
       throw new AppException(
         'INVALID_CREDENTIALS',
         'Email hoặc mật khẩu không đúng',
@@ -93,6 +116,14 @@ export class AuthService {
 
     // So khớp mật khẩu TRƯỚC, khóa SAU: chỉ người biết đúng mật khẩu mới thấy tài khoản bị khóa
     if (user.status !== UserStatus.ACTIVE) {
+      await this.auditService.logStandalone({
+        actorId: user.id,
+        actorRole: user.role,
+        action: AuditAction.AUTH_LOGIN_FAILED,
+        targetType: 'user',
+        targetId: user.id,
+        metadata: { email: dto.email, reason: 'user_locked' },
+      });
       throw new AppException(
         'USER_LOCKED',
         'Tài khoản đã bị khóa',
@@ -108,6 +139,14 @@ export class AuthService {
       exp: number;
       iat: number;
     };
+
+    await this.auditService.logStandalone({
+      actorId: user.id,
+      actorRole: user.role,
+      action: AuditAction.AUTH_LOGIN_SUCCESS,
+      targetType: 'user',
+      targetId: user.id,
+    });
 
     return { accessToken, expiresIn: exp - iat };
   }
