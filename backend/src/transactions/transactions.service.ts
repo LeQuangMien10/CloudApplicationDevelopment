@@ -102,10 +102,22 @@ export class TransactionsService {
     // 2. Build QueryBuilder
     const queryBuilder = this.txRepo
       .createQueryBuilder('tx')
-      .leftJoinAndSelect('tx.fromAccount', 'fromAccount')
-      .leftJoinAndSelect('fromAccount.user', 'fromUser')
-      .leftJoinAndSelect('tx.toAccount', 'toAccount')
-      .leftJoinAndSelect('toAccount.user', 'toUser')
+      // Dùng leftJoin (KHÔNG dùng leftJoinAndSelect)
+      .leftJoin('tx.fromAccount', 'fromAccount')
+      .leftJoin('fromAccount.user', 'fromUser')
+      .leftJoin('tx.toAccount', 'toAccount')
+      .leftJoin('toAccount.user', 'toUser')
+      // Chỉ select đích danh số tài khoản và họ tên (kèm id để TypeORM map object)
+      .addSelect([
+        'fromAccount.id',
+        'fromAccount.accountNumber',
+        'fromUser.id',
+        'fromUser.fullName',
+        'toAccount.id',
+        'toAccount.accountNumber',
+        'toUser.id',
+        'toUser.fullName',
+      ])
       .where('(tx.fromAccountId = :accountId OR tx.toAccountId = :accountId)', {
         accountId: targetAccountId,
       });

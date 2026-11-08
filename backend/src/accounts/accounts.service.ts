@@ -76,6 +76,16 @@ export class AccountsService {
    * Tra cứu thông tin người thụ hưởng theo số tài khoản (12 chữ số)
    */
   async lookupByAccountNumber(accountNumber: string) {
+    // 1. Kiểm tra định dạng 12 chữ số
+    if (!/^[0-9]{12}$/.test(accountNumber)) {
+      throw new AppException(
+        'INVALID_ACCOUNT_NUMBER',
+        'Số tài khoản phải gồm đúng 12 chữ số',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // 2. Tìm kiếm tài khoản
     const account = await this.accountsRepository.findOne({
       where: { accountNumber },
       relations: {
@@ -83,10 +93,11 @@ export class AccountsService {
       },
     });
 
-    if (!account) {
+    // 3. Chặn nếu không tìm thấy hoặc là tài khoản quỹ hệ thống (isSystem)
+    if (!account || account.isSystem) {
       throw new AppException(
         'TARGET_ACCOUNT_NOT_FOUND',
-        'Số tài khoản thụ hưởng không tồn tại',
+        'Số tài khoản thụ hưởng không tồn tại hoặc không hợp lệ',
         HttpStatus.NOT_FOUND,
       );
     }
