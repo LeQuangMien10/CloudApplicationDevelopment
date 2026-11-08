@@ -1,6 +1,6 @@
 # Kiến trúc hệ thống
 
-Yêu cầu và workload: [yeu-cau.md](yeu-cau.md). Lý do của từng lựa chọn: [adr/](adr/).
+Yêu cầu: [BRD](../brd/README.md), [SRS](../srs/README.md), [FRS](../frs/README.md). Lý do của từng lựa chọn: [adr/](../adr/).
 
 ## 1. Tổng quan
 
@@ -55,7 +55,7 @@ Phần đã chạy: React SPA (đang hoàn thiện), backend, PostgreSQL. Worker
 
 ## 4. Luồng chuyển tiền
 
-Chi tiết: [sequence-chuyen-tien.md](sequence-chuyen-tien.md).
+Chi tiết: [sequence-chuyen-tien.md](../sequence-chuyen-tien.md).
 
 1. Client gửi `POST /api/transactions/transfer` kèm JWT và `Idempotency-Key` sinh khi mở form.
 2. Mở DB transaction. Giữ chỗ key bằng `INSERT ... ON CONFLICT DO NOTHING`:

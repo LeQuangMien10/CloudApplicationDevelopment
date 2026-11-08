@@ -19,7 +19,7 @@ Các API Phase 1 đã làm xong. Đăng xuất làm ở frontend: xóa token ph�
 
 ## API Phase 2 (dự kiến)
 
-Thiết kế dự kiến để các thành viên làm thống nhất. Người phụ trách được chỉnh khi làm, nhưng phải sửa bảng này và thêm ví dụ request, response trong cùng PR. Yêu cầu chi tiết từng mục (F1 đến F9) xem [phan-cong-cong-viec.md](phan-cong-cong-viec.md).
+Thiết kế dự kiến để các thành viên làm thống nhất. Người phụ trách được chỉnh khi làm, nhưng phải sửa bảng này và thêm ví dụ request, response trong cùng PR. Yêu cầu chi tiết từng mục (F1 đến F9) xem [phase2/spec.md](phase2/spec.md).
 
 | Method | Endpoint | Ai gọi | Mô tả | Phụ trách | Tuần | Trạng thái |
 |---|---|---|---|---|---|---|

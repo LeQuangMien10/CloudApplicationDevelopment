@@ -6,7 +6,7 @@
 
 ## Bối cảnh
 
-Chuyển tiền phải trừ tài khoản gửi và cộng tài khoản nhận cùng thành công hoặc cùng thất bại. Nhóm có 5 người, thời gian một học kỳ. Tải dự kiến nhỏ: khoảng 12 request/giây giờ cao điểm ([yeu-cau.md](../yeu-cau.md), mục 5).
+Chuyển tiền phải trừ tài khoản gửi và cộng tài khoản nhận cùng thành công hoặc cùng thất bại. Nhóm có 5 người, thời gian một học kỳ. Tải dự kiến nhỏ: khoảng 12 request/giây giờ cao điểm ([BRD](../brd/README.md), mục 4).
 
 ## Các phương án
 

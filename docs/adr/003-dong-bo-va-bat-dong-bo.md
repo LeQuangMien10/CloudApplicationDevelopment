@@ -16,7 +16,7 @@ Ngoài chuyển tiền còn có các việc đi kèm: phát hiện giao dịch b
 
 ## Quyết định
 
-Chọn phương án 3. Danh sách từng việc ở [kien-truc.md](../kien-truc.md), mục 3.
+Chọn phương án 3. Danh sách từng việc ở [kien-truc.md](../overview/kien-truc.md), mục 3.
 
 ## Lý do
 
