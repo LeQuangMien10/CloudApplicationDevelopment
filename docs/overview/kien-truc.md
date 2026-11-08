@@ -10,29 +10,47 @@ Tầng xử lý nền theo mẫu **Transactional Outbox** (ADR 007): chuyển ti
 
 ```mermaid
 flowchart LR
-  subgraph CL[Clients]
-    C1[Customer]
-    C2[Bank Operator]
-    C3[Auditor, Admin]
-    UI["Web SPA (React, Vite)<br/>Postman, Swagger UI"]
-    C1 & C2 & C3 --> UI
-  end
-  UI -->|HTTPS, JWT| P[Caddy<br/>Reverse proxy, HTTPS]
-  subgraph CORE[Backend NestJS]
-    direction TB
-    API[API Layer<br/>Middleware, Guards, Pipes,<br/>Exception Filter, Controllers]
-    DOM[Domain Services<br/>Auth, Users, Accounts,<br/>Transactions và sổ cái, Audit,<br/>Fraud: xem và xử lý cảnh báo,<br/>Reconciliation, Health]
-    API --> DOM
-  end
-  P -->|HTTP| API
-  DOM -->|"1 DB transaction:<br/>nghiệp vụ, audit log, outbox event"| DB[("PostgreSQL<br/>users, accounts, transactions,<br/>ledger_entries, idempotency_keys,<br/>audit_logs, outbox_events,<br/>fraud_flags, reconciliation_reports")]
-  subgraph BG[Tầng xử lý nền]
-    W[Worker cùng codebase<br/>luật bất thường, đối soát,<br/>gửi email cảnh báo]
-  end
-  W -->|"lấy outbox_events<br/>FOR UPDATE SKIP LOCKED"| DB
-  W -->|ghi fraud_flags,<br/>reconciliation_reports| DB
-  W -->|chấm điểm rủi ro| AI["Dịch vụ chấm điểm Python<br/>Isolation Forest (tuần 11)"]
-  W -->|Nodemailer| SMTP[SMTP, Email Provider<br/>cảnh báo giao dịch khả nghi]
+    subgraph CLIENTS["Clients"]
+        C1["<b>Customer</b>"]
+        C2["<b>Bank Operator</b>"]
+        C3["<b>Auditor / Admin</b>"]
+        UI["<b>Web Client</b><br>React + Vite<br>Postman / Swagger UI"]
+        C1 --> UI
+        C2 --> UI
+        C3 --> UI
+    end
+ 
+    PROXY["<b>Caddy</b><br>Reverse Proxy, HTTPS"]
+ 
+    subgraph CORE["Backend Core (NestJS)"]
+        API["<b>API Layer</b><br>Middleware, Guards, Pipes<br>Exception Filter, Controllers"]
+        DOM["<b>Domain Services</b><br>Auth, Users, Accounts<br>Transactions + Ledger, Audit<br>Fraud Flags, Reconciliation"]
+        API --> DOM
+    end
+ 
+    subgraph WORKER["Tầng xử lý nền"]
+        W["<b>Background Worker</b><br>Outbox Poller:<br>• Xử lý luật bất thường<br>• Đối soát giao dịch<br>• Gửi email cảnh báo"]
+    end
+ 
+    subgraph DATA["Tầng dữ liệu"]
+        PG[("<b>PostgreSQL</b><br>users, accounts, transactions,<br>ledger_entries, idempotency_keys,<br>audit_logs, outbox_events,<br>fraud_flags, reconciliation_reports")]
+    end
+ 
+    subgraph EXT["Dịch vụ bên ngoài"]
+        SMTP["<b>SMTP / Email</b><br>Cảnh báo giao dịch khả nghi"]
+    end
+ 
+    subgraph INT["Dịch vụ tự phát triển"]
+        AI["<b>Dịch vụ chấm điểm Python</b><br>Isolation Forest"]
+    end
+ 
+    UI -- "HTTPS + JWT" --> PROXY
+    PROXY -- "HTTP" --> API
+    DOM -- "DB transaction:<br>nghiệp vụ + audit log + outbox event" --> PG
+    W -- "lấy outbox_events<br>FOR UPDATE SKIP LOCKED" --> PG
+    W -- "ghi fraud_flags,<br>reconciliation_reports" --> PG
+    W -- "Nodemailer" --> SMTP
+    W -- "gọi API chấm điểm" --> AI
 ```
 
 Phần đã chạy trên `main`: backend (Auth, Users, Accounts, Transactions và sổ cái, Audit, Health), PostgreSQL. Lưu giao dịch `failed` và audit log của chuyển tiền (F4), React SPA đang ở nhánh riêng, chưa merge. Phần còn lại theo lịch: Caddy tuần 6; worker, Fraud, Reconciliation tuần 8; backup tuần 9; dịch vụ Python tuần 11. Gửi email là dự kiến, chờ bổ sung vào phân công.
