@@ -98,6 +98,7 @@ Tài khoản mẫu: `an@example.com`, `binh@example.com`, `chi@example.com` (m�
 | 5c.6 | Khóa tài khoản quỹ `000000000000` | `422 CANNOT_MODIFY_SYSTEM_ACCOUNT` | [ ] | |
 | 5c.7 | Customer và auditor gọi API này | `403` | [ ] | |
 | 5c.8 | Auditor xem audit log sau khi khóa/mở | Có `account_frozen` và `account_unfrozen` kèm `reason` | [ ] | |
+| 5c.9 | Đặt `status='closed'` bằng SQL cho một tài khoản, rồi khóa và mở bằng API | Đều `422 ACCOUNT_CLOSED`, không có log mới | [ ] | |
 
 ## 6. Toàn vẹn dữ liệu và kỹ thuật
 

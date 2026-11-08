@@ -7,7 +7,7 @@ import { Account, AccountStatus } from './entities/account.entity.js';
 
 describe('AccountsService.updateStatus (F3)', () => {
   const manager = {
-    findOneBy: vi.fn(),
+    findOne: vi.fn(),
     save: vi.fn(async (a: Account) => a),
   };
   const dataSource = {
@@ -38,7 +38,7 @@ describe('AccountsService.updateStatus (F3)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    manager.findOneBy.mockResolvedValue(makeAccount());
+    manager.findOne.mockResolvedValue(makeAccount());
   });
 
   it('khóa tài khoản: đổi trạng thái, ghi ACCOUNT_FROZEN kèm reason trong cùng transaction', async () => {
@@ -71,7 +71,7 @@ describe('AccountsService.updateStatus (F3)', () => {
   });
 
   it('mở tài khoản: ghi ACCOUNT_UNFROZEN', async () => {
-    manager.findOneBy.mockResolvedValue(
+    manager.findOne.mockResolvedValue(
       makeAccount({ status: AccountStatus.FROZEN }),
     );
 
@@ -84,7 +84,7 @@ describe('AccountsService.updateStatus (F3)', () => {
   });
 
   it('gọi đúng trạng thái hiện có: không đổi, không ghi log (idempotent)', async () => {
-    manager.findOneBy.mockResolvedValue(
+    manager.findOne.mockResolvedValue(
       makeAccount({ status: AccountStatus.FROZEN }),
     );
 
@@ -101,7 +101,7 @@ describe('AccountsService.updateStatus (F3)', () => {
   });
 
   it('tài khoản không tồn tại -> 404 ACCOUNT_NOT_FOUND', async () => {
-    manager.findOneBy.mockResolvedValue(null);
+    manager.findOne.mockResolvedValue(null);
 
     const err = await service
       .updateStatus('acc-1', AccountStatus.FROZEN, 'lý do', actor)
@@ -116,7 +116,7 @@ describe('AccountsService.updateStatus (F3)', () => {
   });
 
   it('tài khoản quỹ -> 422 CANNOT_MODIFY_SYSTEM_ACCOUNT, không đổi gì', async () => {
-    manager.findOneBy.mockResolvedValue(
+    manager.findOne.mockResolvedValue(
       makeAccount({ isSystem: true, accountNumber: '000000000000' }),
     );
 
@@ -132,5 +132,37 @@ describe('AccountsService.updateStatus (F3)', () => {
     expect(err.getStatus()).toBe(422);
     expect(manager.save).not.toHaveBeenCalled();
     expect(auditService.log).not.toHaveBeenCalled();
+  });
+
+  it('tài khoản đã đóng -> 422 ACCOUNT_CLOSED dù muốn khóa hay mở, không đổi gì', async () => {
+    for (const target of [AccountStatus.FROZEN, AccountStatus.ACTIVE]) {
+      manager.findOne.mockResolvedValue(
+        makeAccount({ status: AccountStatus.CLOSED }),
+      );
+
+      const err = await service
+        .updateStatus('acc-1', target, 'lý do', actor)
+        .then(
+          () => null,
+          (e) => e,
+        );
+
+      expect(err).toBeInstanceOf(AppException);
+      expect(err.code).toBe('ACCOUNT_CLOSED');
+      expect(err.getStatus()).toBe(422);
+    }
+    expect(manager.save).not.toHaveBeenCalled();
+    expect(auditService.log).not.toHaveBeenCalled();
+  });
+
+  it('đọc tài khoản với khóa pessimistic_write để hai operator đổi cùng lúc không ghi log trùng', async () => {
+    manager.findOne.mockResolvedValue(makeAccount());
+
+    await service.updateStatus('acc-1', AccountStatus.FROZEN, 'lý do', actor);
+
+    expect(manager.findOne).toHaveBeenCalledWith(Account, {
+      where: { id: 'acc-1' },
+      lock: { mode: 'pessimistic_write' },
+    });
   });
 });

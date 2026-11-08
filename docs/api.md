@@ -147,7 +147,7 @@ Mật khẩu ít nhất 8 ký tự, có cả chữ và số. Email được chuy
 [ { "id": "<uuid>", "accountNumber": "100000000001", "balance": "10000000.00", "currency": "VND", "status": "active" } ]
 ```
 
-**`PATCH /api/operator/accounts/:id/status`** → `200` (F3). Operator khóa tài khoản khi nghi ngờ gian lận: user vẫn đăng nhập và xem số dư, nhưng tài khoản không chuyển đi và không nhận tiền được (`422 SENDER/TARGET_ACCOUNT_NOT_ACTIVE`). `reason` bắt buộc khi `status = "frozen"`. Tài khoản quỹ `000000000000` không đổi được. Gọi đúng trạng thái hiện có vẫn `200`, không ghi log trùng.
+**`PATCH /api/operator/accounts/:id/status`** → `200` (F3). Operator khóa tài khoản khi nghi ngờ gian lận: user vẫn đăng nhập và xem số dư, nhưng tài khoản không chuyển đi và không nhận tiền được (`422 SENDER/TARGET_ACCOUNT_NOT_ACTIVE`). `reason` bắt buộc khi `status = "frozen"`. Tài khoản quỹ `000000000000` không đổi được; tài khoản đã `closed` là trạng thái cuối (`422 ACCOUNT_CLOSED`). Gọi đúng trạng thái hiện có vẫn `200`, không ghi log trùng.
 
 ```json
 // request
@@ -220,6 +220,7 @@ Mỗi response có header `X-Request-Id`. Client có thể tự gửi header nà
 | 409 | `IDEMPOTENCY_CONFLICT` | Cùng Idempotency-Key nhưng khác nội dung (TV3) |
 | 422 | `CANNOT_LOCK_SELF` | Admin tự khóa chính mình |
 | 422 | `CANNOT_MODIFY_SYSTEM_ACCOUNT` | Operator/admin cố đổi trạng thái tài khoản quỹ `000000000000` (F3) |
+| 422 | `ACCOUNT_CLOSED` | Tài khoản đã đóng là trạng thái cuối, không khóa/mở lại được (F3) |
 | 422 | `SENDER_ACCOUNT_NOT_ACTIVE`, `TARGET_ACCOUNT_NOT_ACTIVE` | Tài khoản nguồn hoặc đích không ở trạng thái active (TV3) |
 | 422 | `INSUFFICIENT_FUNDS`, `SAME_ACCOUNT` | Vi phạm nghiệp vụ chuyển tiền (TV3) |
 | 429 | `RATE_LIMITED` | Gửi quá nhiều request (Phase 2, TV2) |

@@ -80,6 +80,8 @@ export class AccountsService {
    * F3: operator khóa (frozen) hoặc mở (active) tài khoản ngân hàng.
    * Đổi trạng thái và audit log trong cùng DB transaction. Gọi đúng trạng thái
    * hiện có thì trả về như cũ, không ghi log trùng (idempotent).
+   * Đọc với pessimistic_write như luồng chuyển khoản: hai operator đổi trạng thái
+   * cùng lúc thì request sau chờ và rơi vào nhánh idempotent, không ghi log trùng.
    * Chuyển khoản đã chặn tài khoản không active từ Phase 1, không cần sửa transfer.
    */
   async updateStatus(
@@ -94,7 +96,10 @@ export class AccountsService {
     updatedAt: Date;
   }> {
     return this.dataSource.transaction(async (manager) => {
-      const account = await manager.findOneBy(Account, { id });
+      const account = await manager.findOne(Account, {
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
       if (!account) {
         throw new AppException(
           'ACCOUNT_NOT_FOUND',
@@ -106,6 +111,14 @@ export class AccountsService {
         throw new AppException(
           'CANNOT_MODIFY_SYSTEM_ACCOUNT',
           'Không thể thay đổi trạng thái tài khoản quỹ của ngân hàng',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      // Tài khoản đã đóng là trạng thái cuối, khóa/mở không được thay đổi nó
+      if (account.status === AccountStatus.CLOSED) {
+        throw new AppException(
+          'ACCOUNT_CLOSED',
+          'Tài khoản đã đóng, không thể khóa hoặc mở',
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }

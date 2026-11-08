@@ -41,7 +41,8 @@ export class OperatorAccountsController {
   @ApiResponse({ status: 404, description: 'ACCOUNT_NOT_FOUND' })
   @ApiResponse({
     status: 422,
-    description: 'CANNOT_MODIFY_SYSTEM_ACCOUNT - tài khoản quỹ không đổi được',
+    description:
+      'CANNOT_MODIFY_SYSTEM_ACCOUNT - tài khoản quỹ không đổi được; ACCOUNT_CLOSED - tài khoản đã đóng, không khóa/mở được',
   })
   updateStatus(
     @CurrentUser() operator: RequestUser,

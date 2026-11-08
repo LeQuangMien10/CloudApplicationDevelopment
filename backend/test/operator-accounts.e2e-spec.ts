@@ -38,7 +38,7 @@ describe('Operator khóa, mở tài khoản ngân hàng (F3, e2e)', () => {
 
   async function registerCustomer(name: string) {
     const email = `f3-${name}-${Date.now()}@example.com`;
-    const reg = await request(app.getHttpServer())
+    await request(app.getHttpServer())
       .post('/api/auth/register')
       .send({ fullName: name, email, password: 'Password@123' })
       .expect(201);
@@ -205,6 +205,36 @@ describe('Operator khóa, mở tài khoản ngân hàng (F3, e2e)', () => {
       .set('Authorization', `Bearer ${operator}`)
       .send({ status: 'active' })
       .expect(200);
+  });
+
+  it('tài khoản đã đóng là trạng thái cuối: khóa lẫn mở đều 422 ACCOUNT_CLOSED', async () => {
+    const operator = await loginAs('operator@bank.local', 'Staff@123');
+    const customer = await registerCustomer('f3-closed');
+
+    // chưa có luồng nghiệp vụ nào đóng tài khoản, đặt trạng thái bằng owner
+    await owner.query(`UPDATE accounts SET status = 'closed' WHERE id = $1`, [
+      customer.accountId,
+    ]);
+
+    for (const status of ['frozen', 'active']) {
+      const res = await request(app.getHttpServer())
+        .patch(`/api/operator/accounts/${customer.accountId}/status`)
+        .set('Authorization', `Bearer ${operator}`)
+        .send({ status, reason: 'thử trên tài khoản closed' })
+        .expect(422);
+      expect(res.body.code).toBe('ACCOUNT_CLOSED');
+    }
+
+    const logs = await owner.query(
+      `SELECT count(*)::int AS count FROM audit_logs WHERE target_id = $1`,
+      [customer.accountNumber],
+    );
+    expect(logs[0].count).toBe(0);
+
+    // trả lại active để không ảnh hưởng test khác (hiện chỉ test này dùng)
+    await owner.query(`UPDATE accounts SET status = 'active' WHERE id = $1`, [
+      customer.accountId,
+    ]);
   });
 
   it('không đổi được tài khoản quỹ 000000000000 -> 422 CANNOT_MODIFY_SYSTEM_ACCOUNT', async () => {
