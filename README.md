@@ -80,7 +80,7 @@ Tài khoản mẫu sau khi seed:
 | TV4 Tú | Frontend | `frontend/` |
 | TV5 Hiếu | Cloud và DevOps | `infra/`, `.github/`, Dockerfile |
 
-Lịch tuần, yêu cầu từng tính năng, quy ước làm việc: [docs/phan-cong-cong-viec.md](docs/phan-cong-cong-viec.md)
+Lịch tuần, yêu cầu từng tính năng, quy ước làm việc: [docs/plan/phan-cong-cong-viec.md](docs/plan/phan-cong-cong-viec.md)
 
 ## Quy ước làm việc
 

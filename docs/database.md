@@ -61,7 +61,7 @@ erDiagram
 
 ## Phase 2 (dự kiến)
 
-Người phụ trách được chỉnh khi làm và cập nhật mục này trong cùng PR. Yêu cầu chi tiết xem [phan-cong-cong-viec.md](phan-cong-cong-viec.md).
+Người phụ trách được chỉnh khi làm và cập nhật mục này trong cùng PR. Yêu cầu chi tiết xem [phase2/spec.md](phase2/spec.md).
 
 | Thay đổi | Nội dung | Phụ trách | Tuần |
 |---|---|---|---|
