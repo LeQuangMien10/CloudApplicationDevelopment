@@ -58,14 +58,14 @@ export class TransactionsController {
   @ApiResponse({
     status: 422,
     description:
-      'SENDER_ACCOUNT_NOT_ACTIVE, TARGET_ACCOUNT_NOT_ACTIVE, INSUFFICIENT_FUNDS, SAME_ACCOUNT',
+      'SENDER_ACCOUNT_NOT_ACTIVE, TARGET_ACCOUNT_NOT_ACTIVE, INSUFFICIENT_FUNDS (lưu giao dịch failed); SAME_ACCOUNT',
   })
   transfer(
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @CurrentUser() user: RequestUser,
     @Body() dto: TransferDto,
   ) {
-    return this.transactionsService.transfer(user.id, idempotencyKey, dto);
+    return this.transactionsService.transfer(user, idempotencyKey, dto);
   }
 
   @Get()

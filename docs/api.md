@@ -31,7 +31,7 @@ Thiết kế dự kiến để các thành viên làm thống nhất. Người p
 | POST | `/api/reconciliation/run` | Admin | Chạy đối soát ngay (F7) | TV1 | 8 | Chưa |
 
 Thay đổi ở API cũ:
-- `GET /api/transactions` có thêm giao dịch `failed` kèm `failureReason` (F4, TV3).
+- **Xong (F4, TV3):** chuyển khoản lỗi nghiệp vụ được lưu thành giao dịch `failed` kèm `failureReason`. `GET /api/transactions` và `GET /api/transactions/:id` trả cả giao dịch này cho bên gửi. Chi tiết xem mục `POST /api/transactions/transfer` bên dưới.
 - Đăng nhập và chuyển khoản có rate limit, vượt thì `429 RATE_LIMITED`. Sai mật khẩu nhiều lần thì tạm khóa đăng nhập (F9, TV2).
 - Operator, Auditor xem được giao dịch của mọi tài khoản. Cách lọc chốt khi làm F1.
 
@@ -77,7 +77,7 @@ await this.auditService.logStandalone({ action: AuditAction.AUTH_LOGIN_FAILED, .
 
 `requestId` và `ip` được `AuditService` tự lấy từ request context (AsyncLocalStorage do `RequestIdMiddleware` gắn), không cần truyền tham số. Thêm action mới trong enum `AuditAction` của `src/audit/entities/audit-log.entity.ts`.
 
-Danh sách action hiện có: `auth_register`, `auth_login_success`, `auth_login_failed`, `user_locked`, `user_unlocked`, `account_frozen` (F3), `account_unfrozen` (F3). Nhật bổ sung `transfer_completed`, `transfer_failed` (F4), `fraud_flag_reviewed` (F6); Châu Anh bổ sung `auth_login_locked` (F9).
+Danh sách action hiện có: `auth_register`, `auth_login_success`, `auth_login_failed`, `user_locked`, `user_unlocked`, `account_frozen` (F3), `account_unfrozen` (F3), `transfer_completed`, `transfer_failed` (F4). Nhật bổ sung `fraud_flag_reviewed` (F6); Châu Anh bổ sung `auth_login_locked` (F9).
 
 ## Request và response
 
@@ -165,7 +165,14 @@ Idempotency-Key: 6f1c2a7e-4b8d-4c55-9a51-0d6e2b7f3c11
 
 - Số tiền luôn gửi và nhận dạng **chuỗi**, tối đa 2 chữ số thập phân. Gửi dạng số sẽ bị `400 VALIDATION_ERROR`.
 - `description` không bắt buộc, tối đa 140 ký tự. Body có trường lạ (ví dụ `memo`) cũng bị `400`.
-- `Idempotency-Key` sinh khi mở form, tối đa 64 ký tự. Gửi lại cùng key và cùng body thì nhận lại đúng response cũ, tiền không bị trừ lần hai. Chỉ sinh key mới sau khi chuyển thành công.
+- `Idempotency-Key` sinh khi mở form, tối đa 64 ký tự. Gửi lại cùng key và cùng body thì nhận lại đúng response cũ, tiền không bị trừ lần hai. Sinh key mới sau khi chuyển thành công, hoặc khi người dùng sửa nội dung lệnh.
+
+**Giao dịch thất bại (F4).** Lỗi `INSUFFICIENT_FUNDS`, `SENDER_ACCOUNT_NOT_ACTIVE`, `TARGET_ACCOUNT_NOT_ACTIVE` vẫn trả `422` như cũ, nhưng backend lưu thêm một giao dịch `failed`:
+- Lưu trong transaction riêng sau khi rollback, không ghi sổ cái, số dư hai bên không đổi.
+- `failureReason` là mã lỗi, `completedAt` là `null`. Ghi audit log `transfer_failed`; chuyển thành công ghi `transfer_completed`.
+- `Idempotency-Key` được lưu cùng response `422`. Gửi lại cùng key và cùng body thì nhận lại đúng lỗi đó, không sinh thêm giao dịch `failed`. Muốn thử lại (ví dụ sau khi nạp thêm tiền) thì dùng key mới.
+- Không lưu khi lỗi validate (`400`), thiếu key, sai chủ tài khoản nguồn hoặc đích không tồn tại (`404`), `SAME_ACCOUNT`, `IDEMPOTENCY_CONFLICT` hoặc lỗi hệ thống (`500`).
+- Lưu giao dịch `failed` bị lỗi thì chỉ ghi log server, client vẫn nhận lỗi `422` gốc.
 
 **`GET /api/transactions?page=1&limit=10`** → `200`. `limit` mặc định 20, tối đa 100. Gồm cả tiền vào và tiền ra, mới nhất trước. Không truyền `accountId` thì lấy tài khoản đầu tiên của user. `from`, `to` dạng ngày `YYYY-MM-DD`.
 
@@ -178,7 +185,15 @@ Idempotency-Key: 6f1c2a7e-4b8d-4c55-9a51-0d6e2b7f3c11
 
 `fromAccountId` trùng `id` tài khoản của mình là tiền ra, ngược lại là tiền vào. `type` là `deposit` với tiền nạp từ tài khoản quỹ.
 
-**`GET /api/transactions/:id`** → `200`, cùng dạng một phần tử trong `transactions` ở trên. Chỉ bên gửi và bên nhận xem được, người khác nhận `404 TRANSACTION_NOT_FOUND`.
+Giao dịch `failed` (F4) chỉ hiện trong lịch sử của **bên gửi**, bên nhận không thấy:
+
+```json
+{ "id": "<uuid>", "type": "transfer", "status": "failed", "fromAccountId": "<uuid>", "toAccountId": "<uuid>",
+  "amount": "20000000.00", "description": "...", "failureReason": "INSUFFICIENT_FUNDS", "initiatedBy": "<uuid>",
+  "createdAt": "...", "completedAt": null }
+```
+
+**`GET /api/transactions/:id`** → `200`, cùng dạng một phần tử trong `transactions` ở trên. Chỉ bên gửi và bên nhận xem được, người khác nhận `404 TRANSACTION_NOT_FOUND`. Giao dịch `failed` chỉ bên gửi xem được, bên nhận cũng nhận `404`.
 
 **`GET /api/health`** → `200`. DB không phản hồi thì trả `503 DB_UNAVAILABLE`.
 
@@ -210,8 +225,9 @@ Mỗi response có header `X-Request-Id`. Client có thể tự gửi header nà
 | 409 | `EMAIL_ALREADY_EXISTS` | Đăng ký trùng email |
 | 409 | `IDEMPOTENCY_CONFLICT` | Cùng Idempotency-Key nhưng khác nội dung (TV3) |
 | 422 | `CANNOT_LOCK_SELF` | Admin tự khóa chính mình |
-| 422 | `SENDER_ACCOUNT_NOT_ACTIVE`, `TARGET_ACCOUNT_NOT_ACTIVE` | Tài khoản nguồn hoặc đích không ở trạng thái active (TV3) |
-| 422 | `INSUFFICIENT_FUNDS`, `SAME_ACCOUNT` | Vi phạm nghiệp vụ chuyển tiền (TV3) |
+| 422 | `SENDER_ACCOUNT_NOT_ACTIVE`, `TARGET_ACCOUNT_NOT_ACTIVE` | Tài khoản nguồn hoặc đích không ở trạng thái active, có lưu giao dịch `failed` (TV3) |
+| 422 | `INSUFFICIENT_FUNDS` | Số dư không đủ, có lưu giao dịch `failed` (TV3) |
+| 422 | `SAME_ACCOUNT` | Chuyển cho chính tài khoản nguồn, không lưu giao dịch `failed` (TV3) |
 | 429 | `RATE_LIMITED` | Gửi quá nhiều request (Phase 2, TV2) |
 | 500 | `INTERNAL_ERROR` | Lỗi hệ thống, tra log bằng `requestId` |
 | 503 | `DB_UNAVAILABLE` | `/api/health` không kết nối được database (TV5) |
