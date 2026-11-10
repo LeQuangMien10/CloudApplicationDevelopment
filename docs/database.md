@@ -43,6 +43,7 @@ erDiagram
 - **Sổ cái chỉ thêm dòng (TV3):**
   - Trigger chặn `UPDATE`, `DELETE`, `TRUNCATE` trên `ledger_entries`.
   - Trigger kiểm tra lúc commit: giao dịch transfer `completed` phải có đúng 1 dòng debit, 1 dòng credit, đúng số tiền và đúng tài khoản. Sai thì cả transaction bị hủy.
+- **Khóa tài khoản ngân hàng (TV2, F3):** operator khóa (`frozen`) khi nghi ngờ gian lận — user vẫn đăng nhập, xem số dư được, nhưng không chuyển đi và không nhận tiền (transfer chặn sẵn mọi trạng thái khác `active`). Chỉ nhận `frozen`/`active` qua API, tài khoản quỹ `000000000000` không đổi được, tài khoản đã `closed` là trạng thái cuối (`ACCOUNT_CLOSED`), `reason` bắt buộc khi khóa, và mọi thao tác ghi audit log trong cùng DB transaction. Trạng thái đọc với khóa dòng `pessimistic_write` nên hai operator đổi cùng lúc không sinh log trùng.
 - **Audit log chỉ thêm dòng (TV2, F2):**
   - `banking_app` chỉ có `SELECT`, `INSERT` trên `audit_logs`; `PUBLIC` bị `REVOKE ALL`.
   - Trigger chặn `UPDATE`, `DELETE`, `TRUNCATE` kể cả với owner, trừ khi thành viên role `audit_maintainer` bật `app.audit_maintenance` trong transaction.
@@ -64,7 +65,7 @@ erDiagram
 
 ## Phase 2 (dự kiến)
 
-Người phụ trách được chỉnh khi làm và cập nhật mục này trong cùng PR. Yêu cầu chi tiết xem [phan-cong-cong-viec.md](phan-cong-cong-viec.md).
+Người phụ trách được chỉnh khi làm và cập nhật mục này trong cùng PR. Yêu cầu chi tiết xem [phase2/spec.md](phase2/spec.md).
 
 | Thay đổi | Nội dung | Phụ trách | Tuần |
 |---|---|---|---|

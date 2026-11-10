@@ -19,12 +19,12 @@ Các API Phase 1 đã làm xong. Đăng xuất làm ở frontend: xóa token ph�
 
 ## API Phase 2 (dự kiến)
 
-Thiết kế dự kiến để các thành viên làm thống nhất. Người phụ trách được chỉnh khi làm, nhưng phải sửa bảng này và thêm ví dụ request, response trong cùng PR. Yêu cầu chi tiết từng mục (F1 đến F9) xem [phan-cong-cong-viec.md](phan-cong-cong-viec.md).
+Thiết kế dự kiến để các thành viên làm thống nhất. Người phụ trách được chỉnh khi làm, nhưng phải sửa bảng này và thêm ví dụ request, response trong cùng PR. Yêu cầu chi tiết từng mục (F1 đến F9) xem [phase2/spec.md](phase2/spec.md).
 
 | Method | Endpoint | Ai gọi | Mô tả | Phụ trách | Tuần | Trạng thái |
 |---|---|---|---|---|---|---|
 | GET | `/api/audit-logs?actorId=&action=&from=&to=&requestId=&page=&limit=` | Auditor, Admin | Tra cứu audit log (F2) | TV2 | 7 | **Xong** |
-| PATCH | `/api/operator/accounts/:id/status` | Operator, Admin | Khóa, mở tài khoản ngân hàng, body `{ status: "frozen" \| "active", reason }` (F3) | TV2 | 7 | Chưa |
+| PATCH | `/api/operator/accounts/:id/status` | Operator, Admin | Khóa, mở tài khoản ngân hàng, body `{ status: "frozen" \| "active", reason }` (F3) | TV2 | 7 | **Xong** |
 | GET | `/api/operator/fraud-flags?status=&page=&limit=` | Operator, Auditor, Admin | Danh sách cảnh báo bất thường (F6) | TV3 | 8 | Chưa |
 | PATCH | `/api/operator/fraud-flags/:id` | Operator, Admin | Xử lý cảnh báo, body `{ status: "confirmed" \| "dismissed", note }` (F6) | TV3 | 8 | Chưa |
 | GET | `/api/reconciliation/reports` | Auditor, Admin | Danh sách báo cáo đối soát (F7) | TV1 | 8 | Chưa |
@@ -147,6 +147,15 @@ Mật khẩu ít nhất 8 ký tự, có cả chữ và số. Email được chuy
 [ { "id": "<uuid>", "accountNumber": "100000000001", "balance": "10000000.00", "currency": "VND", "status": "active" } ]
 ```
 
+**`PATCH /api/operator/accounts/:id/status`** → `200` (F3). Operator khóa tài khoản khi nghi ngờ gian lận: user vẫn đăng nhập và xem số dư, nhưng tài khoản không chuyển đi và không nhận tiền được (`422 SENDER/TARGET_ACCOUNT_NOT_ACTIVE`). `reason` bắt buộc khi `status = "frozen"`. Tài khoản quỹ `000000000000` không đổi được; tài khoản đã `closed` là trạng thái cuối (`422 ACCOUNT_CLOSED`). Gọi đúng trạng thái hiện có vẫn `200`, không ghi log trùng.
+
+```json
+// request
+{ "status": "frozen", "reason": "Nghi ngờ gian lận, chờ điều tra" }
+// response
+{ "id": "<uuid>", "accountNumber": "100000000001", "status": "frozen", "updatedAt": "..." }
+```
+
 **`POST /api/transactions/transfer`** → `201`
 
 ```
@@ -218,13 +227,15 @@ Mỗi response có header `X-Request-Id`. Client có thể tự gửi header nà
 | 401 | `USER_LOCKED` | User bị khóa, kể cả khi dùng token cấp trước đó |
 | 403 | `FORBIDDEN` | Đã đăng nhập nhưng không đủ quyền |
 | 404 | `USER_NOT_FOUND` | Admin thao tác trên user không tồn tại |
-| 404 | `ACCOUNT_NOT_FOUND` | Xem lịch sử giao dịch của tài khoản không tồn tại hoặc không thuộc mình (TV3) |
+| 404 | `ACCOUNT_NOT_FOUND` | Lịch sử giao dịch của tài khoản không tồn tại hoặc không thuộc mình (TV3); operator khóa tài khoản không tồn tại (F3) |
 | 404 | `SENDER_ACCOUNT_NOT_FOUND` | Tài khoản nguồn không tồn tại hoặc không thuộc user đang đăng nhập (TV3) |
 | 404 | `TARGET_ACCOUNT_NOT_FOUND` | Không có tài khoản đích với số tài khoản đã gửi (TV3) |
 | 404 | `TRANSACTION_NOT_FOUND` | Giao dịch không tồn tại, hoặc không phải giao dịch của mình (TV3) |
 | 409 | `EMAIL_ALREADY_EXISTS` | Đăng ký trùng email |
 | 409 | `IDEMPOTENCY_CONFLICT` | Cùng Idempotency-Key nhưng khác nội dung (TV3) |
 | 422 | `CANNOT_LOCK_SELF` | Admin tự khóa chính mình |
+| 422 | `CANNOT_MODIFY_SYSTEM_ACCOUNT` | Operator/admin cố đổi trạng thái tài khoản quỹ `000000000000` (F3) |
+| 422 | `ACCOUNT_CLOSED` | Tài khoản đã đóng là trạng thái cuối, không khóa/mở lại được (F3) |
 | 422 | `SENDER_ACCOUNT_NOT_ACTIVE`, `TARGET_ACCOUNT_NOT_ACTIVE` | Tài khoản nguồn hoặc đích không ở trạng thái active, có lưu giao dịch `failed` (TV3) |
 | 422 | `INSUFFICIENT_FUNDS` | Số dư không đủ, có lưu giao dịch `failed` (TV3) |
 | 422 | `SAME_ACCOUNT` | Chuyển cho chính tài khoản nguồn, không lưu giao dịch `failed` (TV3) |

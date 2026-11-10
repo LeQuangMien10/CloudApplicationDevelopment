@@ -60,7 +60,7 @@ Cập nhật bản mới: `git pull && docker compose up -d --build`. Migration 
 
 ## Phase 2
 
-Việc của TV5, theo [docs/phan-cong-cong-viec.md](../docs/phan-cong-cong-viec.md):
+Việc của TV5, theo [docs/plan/phan-cong-cong-viec.md](../docs/plan/phan-cong-cong-viec.md):
 
 | Việc | Tuần |
 |---|---|
