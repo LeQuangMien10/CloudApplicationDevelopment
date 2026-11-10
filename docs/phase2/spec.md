@@ -55,6 +55,12 @@ Auditor chỉ đọc, không có API ghi nào.
 - Không ghi sổ cái cho giao dịch `failed`. Response trả về vẫn là `422` như hiện tại.
 - Chỉ lưu khi tài khoản nguồn hợp lệ và thuộc user. Lỗi validate, sai chủ tài khoản thì không lưu.
 - Lịch sử giao dịch hiển thị cả giao dịch `failed`.
+- Các điểm đã chốt khi làm:
+  - Chỉ lưu với `INSUFFICIENT_FUNDS`, `SENDER_ACCOUNT_NOT_ACTIVE`, `TARGET_ACCOUNT_NOT_ACTIVE`. `SAME_ACCOUNT` và đích không tồn tại không lưu được vì vi phạm ràng buộc của bảng `transactions`.
+  - Lưu luôn `Idempotency-Key` với response `422`: gửi lại cùng key nhận lại đúng lỗi, không sinh thêm giao dịch `failed`.
+  - Giao dịch `failed` chỉ bên gửi thấy. Bên nhận không thấy trong lịch sử và nhận `404` khi xem chi tiết.
+  - Ghi audit log `transfer_completed` và `transfer_failed`.
+  - Test: `backend/test/transfer.e2e-spec.ts` (test 10 đến 17). Collection Postman: `backend/test/postman/transactions.postman_collection.json`.
 
 ## F5. Outbox và worker (Nhật, tuần 8)
 
