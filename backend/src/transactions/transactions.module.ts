@@ -2,6 +2,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountsModule } from '../accounts/accounts.module.js';
+import { AuditModule } from '../audit/audit.module.js';
 
 import { IdempotencyKey } from './entities/idempotency-key.entity.js';
 import { LedgerEntry } from './entities/ledger-entry.entity.js';
@@ -17,6 +18,7 @@ import { LedgerPostingService } from './services/ledger-posting.service.js';
   imports: [
     TypeOrmModule.forFeature([Transaction, LedgerEntry, IdempotencyKey, Account]),
     AccountsModule,
+    AuditModule,
   ],
   controllers: [TransactionsController],
   providers: [TransactionsService, LedgerPostingService],

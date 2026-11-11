@@ -36,6 +36,10 @@ erDiagram
   - số tài khoản đúng 12 chữ số
   - mỗi giao dịch không có 2 dòng sổ cái cùng chiều
 - **Idempotency:** khóa chính `(user_id, key)` đảm bảo cùng user gửi cùng key chỉ được ghi một lần.
+- **Giao dịch failed (TV3, F4):**
+  - Lỗi `INSUFFICIENT_FUNDS`, `SENDER_ACCOUNT_NOT_ACTIVE`, `TARGET_ACCOUNT_NOT_ACTIVE` sau khi rollback được lưu thành `transactions.status = failed`, `failure_reason` là mã lỗi, `completed_at` null. Trigger sổ cái chỉ kiểm tra giao dịch `completed`, nên giao dịch `failed` không có dòng `ledger_entries` nào.
+  - Lưu trong transaction riêng, cùng với `idempotency_keys` (`response_code = 422`, `transaction_id` trỏ tới giao dịch failed) và audit log `transfer_failed`.
+  - Trước khi `INSERT transactions`, khóa `FOR KEY SHARE` hai tài khoản theo đúng thứ tự số tài khoản mà lệnh chuyển dùng. Khóa ngoại tự khóa theo thứ tự from rồi to, có thể ngược thứ tự `FOR UPDATE` của lệnh chuyển chiều kia và gây deadlock.
 - **Sổ cái chỉ thêm dòng (TV3):**
   - Trigger chặn `UPDATE`, `DELETE`, `TRUNCATE` trên `ledger_entries`.
   - Trigger kiểm tra lúc commit: giao dịch transfer `completed` phải có đúng 1 dòng debit, 1 dòng credit, đúng số tiền và đúng tài khoản. Sai thì cả transaction bị hủy.
@@ -68,7 +72,7 @@ Người phụ trách được chỉnh khi làm và cập nhật mục này tron
 | Enum `user_role` | **Xong tuần 7:** có `customer`, `operator`, `auditor`, `admin` | TV2 | 7 |
 | Bảng `audit_logs` | **Xong tuần 7:** xem mục "Audit log chỉ thêm dòng" ở trên | TV2 | 7 |
 | `users` | Thêm cột đếm số lần đăng nhập sai, thời điểm hết tạm khóa | TV2 | 9 |
-| `transactions` | Bắt đầu dùng trạng thái `failed` kèm `failure_reason` | TV3 | 7 |
+| `transactions` | **Xong tuần 7:** dùng trạng thái `failed` kèm `failure_reason`, không cần migration. Xem quy tắc "Giao dịch failed" ở trên | TV3 | 7 |
 | Bảng `outbox_events` | id, event_type, payload (jsonb), status, attempts, available_at, created_at, processed_at | TV3 | 8 |
 | Bảng `fraud_flags` | id, transaction_id, rule_code, score, status (open, confirmed, dismissed), reviewed_by, reviewed_at, note, created_at | TV3 | 8 |
 | Bảng `reconciliation_reports` | id, run_at, status, số tài khoản lệch, chi tiết (jsonb) | TV1 | 8 |

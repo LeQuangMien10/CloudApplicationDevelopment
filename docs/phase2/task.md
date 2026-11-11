@@ -5,7 +5,7 @@
 | F1 | Vai trò Operator, Auditor | TV2 | 7 | Xong (#7) |
 | F2 | Audit log | TV2 | 7 | Xong (#8) |
 | F3 | Khóa, mở tài khoản ngân hàng | TV2 | 7 | Xong (#9) |
-| F4 | Lưu giao dịch thất bại | TV3 | 7 | Đang làm, chưa mở PR |
+| F4 | Lưu giao dịch thất bại | TV3 | 7 | Đang review |
 | | API tra cứu tài khoản cho Operator | TV2 | 8 | Issue #11 |
 | | Nạp tiền mô phỏng | Cần chốt | 8 | Chưa làm |
 | | Job quét giao dịch treo | Cần chốt | 8 | Chưa làm |
