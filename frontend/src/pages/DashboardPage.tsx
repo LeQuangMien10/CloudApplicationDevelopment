@@ -23,7 +23,7 @@ export const DashboardPage: React.FC = () => {
         const res = await api.get('/accounts/me');
         const data = Array.isArray(res.data) ? res.data[0] : res.data;
         setAccount(data);
-      } catch (err: any) {
+      } catch {
         // Nếu TV3 chưa xong (501 NOT_IMPLEMENTED), hiển thị cảnh báo và mock dữ liệu tạm để Tú test UI
         setNotice('Backend TV3 chưa hoàn thiện endpoint /accounts/me (501). Đang hiển thị tài khoản mô phỏng.');
         setAccount({

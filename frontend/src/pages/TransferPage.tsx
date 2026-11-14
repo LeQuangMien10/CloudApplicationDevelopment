@@ -1,7 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { api } from '../services/api';
-import { Send, CheckCircle2, AlertTriangle, RefreshCw, CheckCircle, Search } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { v4 as uuidv4 } from "uuid";
+import { api } from "../services/api";
+import {
+  Send,
+  CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
+  CheckCircle,
+} from "lucide-react";
 
 interface Account {
   id: string;
@@ -10,45 +16,47 @@ interface Account {
 }
 
 export const TransferPage: React.FC = () => {
-  const [fromAccountId, setFromAccountId] = useState('');
+  const [fromAccountId, setFromAccountId] = useState("");
   const [senderAccount, setSenderAccount] = useState<Account | null>(null);
-  
-  const [toAccountNumber, setToAccountNumber] = useState('');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
+
+  const [toAccountNumber, setToAccountNumber] = useState("");
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
 
   // State cho phần tra cứu tên người thụ hưởng
   const [recipientName, setRecipientName] = useState<string | null>(null);
   const [searchingRecipient, setSearchingRecipient] = useState(false);
   const [recipientError, setRecipientError] = useState<string | null>(null);
 
-  const [idempotencyKey, setIdempotencyKey] = useState('');
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => uuidv4());
   const [loading, setLoading] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   const initNewKey = () => setIdempotencyKey(uuidv4());
 
   useEffect(() => {
-    initNewKey();
     const fetchMyAccount = async () => {
       try {
-        const res = await api.get('/accounts/me');
+        const res = await api.get("/accounts/me");
         const account = Array.isArray(res.data) ? res.data[0] : res.data;
         if (account?.id) {
           setFromAccountId(account.id);
           setSenderAccount(account);
         }
-      } catch (err: any) {
-        setErrorMessage('Không thể tải thông tin tài khoản nguồn');
+      } catch {
+        // Đổi catch (err: any) thành catch
+        setErrorMessage("Không thể tải thông tin tài khoản nguồn");
       }
     };
     fetchMyAccount();
   }, []);
 
   // Xử lý khi nhập số tài khoản thụ hưởng
-  const handleAccountNumberChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/[^0-9]/g, ''); // Chỉ cho nhập số
+  const handleAccountNumberChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const val = e.target.value.replace(/[^0-9]/g, ""); // Chỉ cho nhập số
     setToAccountNumber(val);
     setRecipientName(null);
     setRecipientError(null);
@@ -56,7 +64,7 @@ export const TransferPage: React.FC = () => {
     // Khi gõ đủ đúng 12 số thì tự động tra cứu
     if (val.length === 12) {
       if (senderAccount?.accountNumber === val) {
-        setRecipientError('Không thể chuyển cho chính tài khoản nguồn');
+        setRecipientError("Không thể chuyển cho chính tài khoản nguồn");
         return;
       }
 
@@ -64,8 +72,8 @@ export const TransferPage: React.FC = () => {
       try {
         const res = await api.get(`/accounts/lookup/${val}`);
         setRecipientName(res.data.accountHolderName);
-      } catch (err: any) {
-        setRecipientError('Không tìm thấy tài khoản thụ hưởng');
+      } catch {
+        setRecipientError("Không tìm thấy tài khoản thụ hưởng");
       } finally {
         setSearchingRecipient(false);
       }
@@ -75,18 +83,18 @@ export const TransferPage: React.FC = () => {
   const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setErrorMessage('');
-    setSuccessMessage('');
+    setErrorMessage("");
+    setSuccessMessage("");
 
     if (toAccountNumber.length !== 12) {
-      setErrorMessage('Số tài khoản thụ hưởng phải gồm đúng 12 chữ số');
+      setErrorMessage("Số tài khoản thụ hưởng phải gồm đúng 12 chữ số");
       setLoading(false);
       return;
     }
 
     try {
       const response = await api.post(
-        '/transactions/transfer',
+        "/transactions/transfer",
         {
           fromAccountId,
           toAccountNumber: toAccountNumber.trim(),
@@ -94,23 +102,29 @@ export const TransferPage: React.FC = () => {
           description: description.trim() || undefined,
         },
         {
-          headers: { 'Idempotency-Key': idempotencyKey },
-        }
+          headers: { "Idempotency-Key": idempotencyKey },
+        },
       );
 
-      setSuccessMessage(`Chuyển tiền thành công! Mã giao dịch: ${response.data?.id || 'COMPLETED'}`);
+      setSuccessMessage(
+        `Chuyển tiền thành công! Mã giao dịch: ${response.data?.id || "COMPLETED"}`,
+      );
       initNewKey();
-      setToAccountNumber('');
-      setAmount('');
-      setDescription('');
+      setToAccountNumber("");
+      setAmount("");
+      setDescription("");
       setRecipientName(null);
-    } catch (err: any) {
-      const msg = err.message || '';
-      let friendlyError = msg;
-      if (msg.includes('SAME_ACCOUNT')) friendlyError = 'Không thể tự chuyển tiền cho chính tài khoản nguồn';
-      else if (msg.includes('INSUFFICIENT_FUNDS')) friendlyError = 'Số dư trong tài khoản không đủ để thực hiện giao dịch';
-      else if (msg.includes('TARGET_ACCOUNT_NOT_FOUND')) friendlyError = 'Số tài khoản thụ hưởng không tồn tại';
-      else if (msg.includes('TARGET_ACCOUNT_NOT_ACTIVE')) friendlyError = 'Tài khoản thụ hưởng đang bị khóa hoặc đóng';
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      let friendlyError = msg || "Giao dịch chuyển tiền thất bại";
+      if (msg.includes("SAME_ACCOUNT"))
+        friendlyError = "Không thể tự chuyển tiền cho chính tài khoản nguồn";
+      else if (msg.includes("INSUFFICIENT_FUNDS"))
+        friendlyError = "Số dư trong tài khoản không đủ để thực hiện giao dịch";
+      else if (msg.includes("TARGET_ACCOUNT_NOT_FOUND"))
+        friendlyError = "Số tài khoản thụ hưởng không tồn tại";
+      else if (msg.includes("TARGET_ACCOUNT_NOT_ACTIVE"))
+        friendlyError = "Tài khoản thụ hưởng đang bị khóa hoặc đóng";
       setErrorMessage(friendlyError);
     } finally {
       setLoading(false);
@@ -120,7 +134,9 @@ export const TransferPage: React.FC = () => {
   return (
     <div className="p-8 max-w-2xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">Chuyển khoản nội bộ</h1>
+        <h1 className="text-2xl font-bold text-slate-800">
+          Chuyển khoản nội bộ
+        </h1>
         <span className="text-xs font-mono bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg border border-slate-200">
           Key: {idempotencyKey.slice(0, 8)}...
         </span>
@@ -128,8 +144,18 @@ export const TransferPage: React.FC = () => {
 
       {senderAccount && (
         <div className="p-4 bg-slate-100 rounded-xl text-sm text-slate-600 flex justify-between">
-          <span>Tài khoản nguồn: <strong>{senderAccount.accountNumber}</strong></span>
-          <span>Số dư: <strong className="text-emerald-600">{new Intl.NumberFormat('vi-VN').format(Number(senderAccount.balance || 0))} đ</strong></span>
+          <span>
+            Tài khoản nguồn: <strong>{senderAccount.accountNumber}</strong>
+          </span>
+          <span>
+            Số dư:{" "}
+            <strong className="text-emerald-600">
+              {new Intl.NumberFormat("vi-VN").format(
+                Number(senderAccount.balance || 0),
+              )}{" "}
+              đ
+            </strong>
+          </span>
         </div>
       )}
 
@@ -142,20 +168,29 @@ export const TransferPage: React.FC = () => {
 
       {errorMessage && (
         <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl flex items-start gap-3">
-          <AlertTriangle size={20} className="text-rose-600 flex-shrink-0 mt-0.5" />
+          <AlertTriangle
+            size={20}
+            className="text-rose-600 flex-shrink-0 mt-0.5"
+          />
           <div>
             <p className="font-semibold">{errorMessage}</p>
             <p className="text-xs text-rose-600 mt-1">
-              * Khóa chống trùng lặp ({idempotencyKey.slice(0, 8)}...) được giữ nguyên để thử lại an toàn.
+              * Khóa chống trùng lặp ({idempotencyKey.slice(0, 8)}...) được giữ
+              nguyên để thử lại an toàn.
             </p>
           </div>
         </div>
       )}
 
-      <form onSubmit={handleTransfer} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+      <form
+        onSubmit={handleTransfer}
+        className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4"
+      >
         {/* Ô nhập số tài khoản + Box hiển thị tên người thụ hưởng */}
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Số tài khoản thụ hưởng (12 chữ số)</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Số tài khoản thụ hưởng (12 chữ số)
+          </label>
           <div className="relative">
             <input
               type="text"
@@ -177,21 +212,32 @@ export const TransferPage: React.FC = () => {
           {/* Hộp hiển thị tên người thụ hưởng sau khi tra cứu thành công */}
           {recipientName && (
             <div className="mt-2.5 p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center gap-2 text-emerald-800">
-              <CheckCircle size={18} className="text-emerald-600 flex-shrink-0" />
+              <CheckCircle
+                size={18}
+                className="text-emerald-600 flex-shrink-0"
+              />
               <div>
-                <span className="text-xs text-emerald-600 block">Người thụ hưởng</span>
-                <span className="font-bold tracking-wide uppercase text-sm">{recipientName}</span>
+                <span className="text-xs text-emerald-600 block">
+                  Người thụ hưởng
+                </span>
+                <span className="font-bold tracking-wide uppercase text-sm">
+                  {recipientName}
+                </span>
               </div>
             </div>
           )}
 
           {recipientError && (
-            <p className="mt-1.5 text-xs text-rose-600 font-medium">{recipientError}</p>
+            <p className="mt-1.5 text-xs text-rose-600 font-medium">
+              {recipientError}
+            </p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Số tiền (VND)</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Số tiền (VND)
+          </label>
           <input
             type="number"
             required
@@ -205,7 +251,9 @@ export const TransferPage: React.FC = () => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Nội dung chuyển khoản (Tối đa 140 ký tự)</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Nội dung chuyển khoản (Tối đa 140 ký tự)
+          </label>
           <input
             type="text"
             maxLength={140}

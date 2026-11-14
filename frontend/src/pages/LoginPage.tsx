@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuthStore } from '../stores/useAuthStore';
-import { api } from '../services/api';
-import { Landmark } from 'lucide-react';
+import React, { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { useAuthStore } from "../stores/useAuthStore";
+import { api } from "../services/api";
+import { Landmark } from "lucide-react";
 
 export const LoginPage: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { setToken, setUser } = useAuthStore();
   const navigate = useNavigate();
@@ -15,29 +15,31 @@ export const LoginPage: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       // 1. POST /api/auth/login
-      const loginRes = await api.post('/auth/login', { email, password });
+      const loginRes = await api.post("/auth/login", { email, password });
       const accessToken = loginRes.data.accessToken;
 
       if (!accessToken) {
-        throw new Error('Không nhận được accessToken từ server');
+        throw new Error("Không nhận được accessToken từ server");
       }
       setToken(accessToken);
 
       // 2. GET /api/auth/me (TV2 đã hoàn thành)
       try {
-        const meRes = await api.get('/auth/me');
+        const meRes = await api.get("/auth/me");
         setUser(meRes.data);
       } catch {
-        setUser({ id: 'me', email, role: 'CUSTOMER' });
+        setUser({ id: "me", email, role: "CUSTOMER" });
       }
 
-      navigate('/');
-    } catch (err: any) {
-      setError(err.message || 'Đăng nhập không thành công');
+      navigate("/");
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Đăng nhập không thành công";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -51,8 +53,12 @@ export const LoginPage: React.FC = () => {
             <Landmark size={36} />
           </div>
         </div>
-        <h2 className="text-2xl font-bold text-center text-slate-800 mb-2">Đăng nhập Ngân hàng Số</h2>
-        <p className="text-sm text-slate-500 text-center mb-6">Mô phỏng giao dịch ngân hàng số Cloud-native</p>
+        <h2 className="text-2xl font-bold text-center text-slate-800 mb-2">
+          Đăng nhập Ngân hàng Số
+        </h2>
+        <p className="text-sm text-slate-500 text-center mb-6">
+          Mô phỏng giao dịch ngân hàng số Cloud-native
+        </p>
 
         {error && (
           <div className="mb-4 p-3.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-sm">
@@ -62,7 +68,9 @@ export const LoginPage: React.FC = () => {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Email
+            </label>
             <input
               type="email"
               required
@@ -74,7 +82,9 @@ export const LoginPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Mật khẩu</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Mật khẩu
+            </label>
             <input
               type="password"
               required
@@ -90,13 +100,16 @@ export const LoginPage: React.FC = () => {
             disabled={loading}
             className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium rounded-xl shadow transition"
           >
-            {loading ? 'Đang xác thực...' : 'Đăng nhập'}
+            {loading ? "Đang xác thực..." : "Đăng nhập"}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm text-slate-500">
-          Chưa có tài khoản?{' '}
-          <Link to="/register" className="text-blue-600 hover:underline font-medium">
+          Chưa có tài khoản?{" "}
+          <Link
+            to="/register"
+            className="text-blue-600 hover:underline font-medium"
+          >
             Đăng ký ngay
           </Link>
         </p>
