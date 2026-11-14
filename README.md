@@ -64,21 +64,23 @@ Tài khoản mẫu sau khi seed:
 | Vai trò | Email | Mật khẩu | Số tài khoản |
 |---|---|---|---|
 | admin | admin@bank.local | Admin@123 | |
+| operator | operator@bank.local | Staff@123 | |
+| auditor | auditor@bank.local | Staff@123 | |
 | customer | an@example.com | Password@123 | 100000000001 (10.000.000) |
 | customer | binh@example.com | Password@123 | 100000000002 (5.000.000) |
 | customer | chi@example.com | Password@123 | 100000000003 (0) |
 
-## Phân công Phase 1 (hạn 24/10)
+## Phân công Phase 2
 
 | Thành viên | Vai trò | Thư mục chính |
 |---|---|---|
-| TV1 Miền | Trưởng nhóm backend | `backend/src/database`, `backend/src/common`, `docs/` |
-| TV2 Châu Anh | Backend xác thực | `backend/src/auth`, `backend/src/users` |
-| TV3 Nhật | Backend chuyển tiền | `backend/src/accounts`, `backend/src/transactions` |
+| TV1 Miền | Trưởng nhóm backend, đối soát, ADR, đánh giá AI | `backend/src/database`, `backend/src/common`, `docs/` |
+| TV2 Châu Anh | Xác thực, phân quyền, audit log, khóa tài khoản | `backend/src/auth`, `backend/src/users`, `backend/src/audit` |
+| TV3 Nhật | Giao dịch, worker, phát hiện bất thường | `backend/src/transactions`, `backend/src/accounts`, `backend/src/fraud` |
 | TV4 Tú | Frontend | `frontend/` |
 | TV5 Hiếu | Cloud và DevOps | `infra/`, `.github/`, Dockerfile |
 
-Chi tiết: [docs/phan-cong-cong-viec.md](docs/phan-cong-cong-viec.md)
+Lịch tuần, yêu cầu từng tính năng, quy ước làm việc: [docs/plan/phan-cong-cong-viec.md](docs/plan/phan-cong-cong-viec.md)
 
 ## Quy ước làm việc
 

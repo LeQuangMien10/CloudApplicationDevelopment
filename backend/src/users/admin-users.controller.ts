@@ -63,7 +63,7 @@ export class AdminUsersController {
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
-    const user = await this.usersService.updateStatus(id, dto.status);
+    const user = await this.usersService.updateStatus(id, dto.status, admin);
     if (!user) {
       throw new AppException(
         'USER_NOT_FOUND',
