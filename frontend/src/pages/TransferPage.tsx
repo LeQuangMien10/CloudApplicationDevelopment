@@ -52,6 +52,19 @@ export const TransferPage: React.FC = () => {
     fetchMyAccount();
   }, []);
 
+  // Xử lý khi người dùng rời chuột/tab khỏi ô số tài khoản (Blur)
+  const handleAccountNumberBlur = () => {
+    // Nếu chưa nhập gì thì không báo lỗi vội
+    if (!toAccountNumber) return;
+
+    // Nếu đã nhập nhưng chưa đủ 12 số
+    if (toAccountNumber.length < 12) {
+      setRecipientError(
+        `Số tài khoản chưa đủ 12 chữ số (hiện có ${toAccountNumber.length}/12 chữ số)`,
+      );
+      setRecipientName(null);
+    }
+  };
   // Xử lý khi nhập số tài khoản thụ hưởng
   const handleAccountNumberChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -106,9 +119,9 @@ export const TransferPage: React.FC = () => {
         },
       );
 
-      setSuccessMessage(
-        `Chuyển tiền thành công! Mã giao dịch: ${response.data?.id || "COMPLETED"}`,
-      );
+      const txId =
+        response.data?.transaction?.id || response.data?.id || "COMPLETED";
+      setSuccessMessage(`Chuyển tiền thành công! Mã giao dịch: ${txId}`);
       initNewKey();
       setToAccountNumber("");
       setAmount("");
@@ -198,6 +211,7 @@ export const TransferPage: React.FC = () => {
               maxLength={12}
               value={toAccountNumber}
               onChange={handleAccountNumberChange}
+              onBlur={handleAccountNumberBlur}
               placeholder="Nhập 12 chữ số (ví dụ: 100000000003)"
               className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono"
             />
@@ -227,10 +241,12 @@ export const TransferPage: React.FC = () => {
             </div>
           )}
 
+          {/* Dòng chữ cảnh báo màu đỏ khi chưa đủ 12 chữ số hoặc tài khoản sai */}
           {recipientError && (
-            <p className="mt-1.5 text-xs text-rose-600 font-medium">
-              {recipientError}
-            </p>
+            <div className="mt-1.5 flex items-center gap-1 text-xs text-rose-600 font-medium">
+              <AlertTriangle size={14} className="flex-shrink-0" />
+              <span>{recipientError}</span>
+            </div>
           )}
         </div>
 

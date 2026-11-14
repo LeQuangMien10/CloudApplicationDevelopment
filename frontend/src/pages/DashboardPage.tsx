@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { api } from '../services/api';
-import { useAuthStore } from '../stores/useAuthStore';
-import { Wallet, CreditCard, AlertCircle } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { api } from "../services/api";
+import { useAuthStore } from "../stores/useAuthStore";
+import { Wallet, CreditCard, AlertCircle } from "lucide-react";
 
 interface AccountData {
   accountNumber: string;
@@ -14,23 +14,27 @@ export const DashboardPage: React.FC = () => {
   const [account, setAccount] = useState<AccountData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchAccount = async () => {
       try {
         setLoading(true);
         // GET /api/accounts/me
-        const res = await api.get('/accounts/me');
+        const res = await api.get("/accounts/me");
         const data = Array.isArray(res.data) ? res.data[0] : res.data;
-        setAccount(data);
-      } catch {
-        // Nếu TV3 chưa xong (501 NOT_IMPLEMENTED), hiển thị cảnh báo và mock dữ liệu tạm để Tú test UI
-        setNotice('Backend TV3 chưa hoàn thiện endpoint /accounts/me (501). Đang hiển thị tài khoản mô phỏng.');
-        setAccount({
-          accountNumber: user?.accountNumber || '123456789012',
-          balance: 0,
-          status: 'ACTIVE',
-        });
+        if (data) {
+          setAccount(data);
+        } else {
+          setError("Không tìm thấy thông tin tài khoản");
+        }
+      } catch (err: unknown) {
+        // BỎ HOÀN TOÀN DỮ LIỆU GIẢ/MOCK THEO YÊU CẦU CỦA LEADER
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Không thể tải thông tin tài khoản";
+        setError(message);
       } finally {
         setLoading(false);
       }
@@ -40,13 +44,18 @@ export const DashboardPage: React.FC = () => {
   }, [user]);
 
   const formatVND = (val: number | string) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(val || 0));
+    return new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: "VND",
+    }).format(Number(val || 0));
   };
 
   if (loading) {
     return (
       <div className="p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[40vh]">
-        <p className="text-slate-500 animate-pulse">Đang tải dữ liệu tài khoản...</p>
+        <p className="text-slate-500 animate-pulse">
+          Đang tải dữ liệu tài khoản...
+        </p>
       </div>
     );
   }
@@ -54,8 +63,12 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Xin chào, {user?.fullName || user?.email}</h1>
-        <p className="text-slate-500 text-sm">Chào mừng bạn đến với Ngân hàng số</p>
+        <h1 className="text-2xl font-bold text-slate-800">
+          Xin chào, {user?.fullName || user?.email}
+        </h1>
+        <p className="text-slate-500 text-sm">
+          Chào mừng bạn đến với Ngân hàng số
+        </p>
       </div>
 
       {notice && (
@@ -68,7 +81,9 @@ export const DashboardPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium text-slate-500">Số dư khả dụng</span>
+            <span className="text-sm font-medium text-slate-500">
+              Số dư khả dụng
+            </span>
             <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
               <Wallet size={22} />
             </div>
@@ -78,22 +93,26 @@ export const DashboardPage: React.FC = () => {
           </p>
           <div className="mt-4">
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-              {account?.status || 'ACTIVE'}
+              {account?.status || "ACTIVE"}
             </span>
           </div>
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium text-slate-500">Số tài khoản thanh toán</span>
+            <span className="text-sm font-medium text-slate-500">
+              Số tài khoản thanh toán
+            </span>
             <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
               <CreditCard size={22} />
             </div>
           </div>
           <p className="text-2xl font-mono font-bold text-slate-800 tracking-wider">
-            {account?.accountNumber || '---'}
+            {account?.accountNumber || "---"}
           </p>
-          <p className="mt-4 text-xs text-slate-400">Đơn vị tiền tệ: VND (Việt Nam Đồng)</p>
+          <p className="mt-4 text-xs text-slate-400">
+            Đơn vị tiền tệ: VND (Việt Nam Đồng)
+          </p>
         </div>
       </div>
     </div>
