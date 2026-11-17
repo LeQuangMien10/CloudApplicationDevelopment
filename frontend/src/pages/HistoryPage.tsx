@@ -4,13 +4,21 @@ import { AlertCircle, ChevronLeft, ChevronRight, History } from "lucide-react";
 
 interface TransactionItem {
   id: string;
-  type: "transfer" | "deposit";
-  fromAccountId: string;
-  toAccountId: string;
+  type?: "transfer" | "deposit";
+  fromAccountId?: string;
+  toAccountId?: string;
+  toAccountNumber?: string;
   amount: string | number;
   description?: string;
-  status: string; // "completed", "processing", "failed"
+  memo?: string;
+  status: string;
   createdAt: string;
+  toAccount?: {
+    accountNumber?: string;
+    user?: {
+      fullName?: string;
+    };
+  };
 }
 
 export const HistoryPage: React.FC = () => {
@@ -36,8 +44,12 @@ export const HistoryPage: React.FC = () => {
         const list = res.data?.transactions || [];
         setTransactions(Array.isArray(list) ? list : []);
         setTotal(res.data?.total || 0);
-      } catch (err: any) {
-        setError(err.message || "Không thể tải lịch sử giao dịch");
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Không thể tải lịch sử giao dịch";
+        setError(message);
         setTransactions([]);
       } finally {
         setLoading(false);
@@ -50,10 +62,12 @@ export const HistoryPage: React.FC = () => {
   const totalPages = Math.ceil(total / limit) || 1;
 
   // Helper hiển thị số tài khoản đích an toàn
-  const getDestinationDisplay = (tx: any) => {
+  const getDestinationDisplay = (tx: TransactionItem) => {
     // 1. Nếu là nạp tiền
-    if (tx.type === 'deposit') {
-      return <span className="text-emerald-600 font-medium">Tài khoản của tôi</span>;
+    if (tx.type === "deposit") {
+      return (
+        <span className="text-emerald-600 font-medium">Tài khoản của tôi</span>
+      );
     }
 
     // 2. Nếu có thông tin User của tài khoản đích do Backend trả về
@@ -64,15 +78,19 @@ export const HistoryPage: React.FC = () => {
       return (
         <div>
           <p className="font-semibold text-slate-800">{recipientName}</p>
-          <p className="text-xs text-slate-400 font-mono">{recipientAccNum || tx.toAccountNumber}</p>
+          <p className="text-xs text-slate-400 font-mono">
+            {recipientAccNum || tx.toAccountNumber}
+          </p>
         </div>
       );
     }
 
     // 3. Fallback nếu chỉ có số tài khoản hoặc ID
-    if (recipientAccNum) return <span className="font-mono">{recipientAccNum}</span>;
-    if (tx.toAccountId) return <span className="font-mono">{tx.toAccountId.slice(0, 8)}...</span>;
-    return '---';
+    if (recipientAccNum)
+      return <span className="font-mono">{recipientAccNum}</span>;
+    if (tx.toAccountId)
+      return <span className="font-mono">{tx.toAccountId.slice(0, 8)}...</span>;
+    return "---";
   };
 
   return (
@@ -113,7 +131,9 @@ export const HistoryPage: React.FC = () => {
               {loading ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-400">
-                    <span className="inline-block animate-pulse">Đang tải lịch sử giao dịch...</span>
+                    <span className="inline-block animate-pulse">
+                      Đang tải lịch sử giao dịch...
+                    </span>
                   </td>
                 </tr>
               ) : transactions.length === 0 ? (
@@ -124,42 +144,54 @@ export const HistoryPage: React.FC = () => {
                 </tr>
               ) : (
                 transactions.map((tx) => {
-                  const isDeposit = tx.type === 'deposit';
+                  const isDeposit = tx.type === "deposit";
                   const statusUpper = tx.status?.toUpperCase();
 
                   return (
                     <tr key={tx.id} className="hover:bg-slate-50 transition">
                       <td className="py-3.5 px-4 font-mono text-xs text-slate-500">
-                        {tx.id ? `${tx.id.slice(0, 8)}...` : '---'}
+                        {tx.id ? `${tx.id.slice(0, 8)}...` : "---"}
                       </td>
-                      
+
                       {/* Cột tài khoản đích */}
                       <td className="py-3.5 px-4 font-mono text-sm text-slate-700">
                         {getDestinationDisplay(tx)}
                       </td>
 
                       {/* Cột số tiền: Phân biệt Tiền vào (+) xanh lá, Tiền ra (-) đen */}
-                      <td className={`py-3.5 px-4 font-bold ${isDeposit ? 'text-emerald-600' : 'text-slate-900'}`}>
-                        {isDeposit ? '+' : '-'} {new Intl.NumberFormat('vi-VN').format(Number(tx.amount || 0))} đ
+                      <td
+                        className={`py-3.5 px-4 font-bold ${isDeposit ? "text-emerald-600" : "text-slate-900"}`}
+                      >
+                        {isDeposit ? "+" : "-"}{" "}
+                        {new Intl.NumberFormat("vi-VN").format(
+                          Number(tx.amount || 0),
+                        )}{" "}
+                        đ
                       </td>
 
                       <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate">
-                        {tx.description || 'Chuyển tiền'}
+                        {tx.description || "Chuyển tiền"}
                       </td>
 
                       {/* Cột trạng thái: Chữ hoa/thường đều khớp màu xanh */}
                       <td className="py-3.5 px-4">
-                        <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                          statusUpper === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' :
-                          statusUpper === 'PROCESSING' ? 'bg-amber-100 text-amber-800' : 
-                          'bg-rose-100 text-rose-800'
-                        }`}>
+                        <span
+                          className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                            statusUpper === "COMPLETED"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : statusUpper === "PROCESSING"
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-rose-100 text-rose-800"
+                          }`}
+                        >
                           {tx.status}
                         </span>
                       </td>
 
                       <td className="py-3.5 px-4 text-slate-400 text-xs">
-                        {tx.createdAt ? new Date(tx.createdAt).toLocaleString('vi-VN') : '---'}
+                        {tx.createdAt
+                          ? new Date(tx.createdAt).toLocaleString("vi-VN")
+                          : "---"}
                       </td>
                     </tr>
                   );

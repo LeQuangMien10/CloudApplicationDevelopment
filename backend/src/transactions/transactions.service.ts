@@ -1,5 +1,5 @@
 // transactions.service.ts
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { DataSource, Repository } from 'typeorm';
 import {
@@ -14,6 +14,23 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { TransferDto } from './dto/transfer.dto.js';
 import { AppException } from '../common/exceptions/app.exception.js';
 import { LedgerPostingService } from './services/ledger-posting.service.js';
+import { AuditService } from '../audit/audit.service.js';
+import { AuditAction } from '../audit/entities/audit-log.entity.js';
+import type { RequestUser } from '../auth/jwt.strategy.js';
+
+/** Lỗi nghiệp vụ được lưu thành giao dịch failed (F4). Các lỗi khác không lưu. */
+const FAILED_TRANSFER_CODES = new Set([
+  'INSUFFICIENT_FUNDS',
+  'SENDER_ACCOUNT_NOT_ACTIVE',
+  'TARGET_ACCOUNT_NOT_ACTIVE',
+]);
+
+interface TransferParties {
+  fromAccountId: string;
+  toAccountId: string;
+  /** Id hai tài khoản theo đúng thứ tự transfer() đã khóa. */
+  lockOrder: [string, string];
+}
 
 /**
  * Phụ trách: TV3 Nhật
@@ -33,6 +50,8 @@ import { LedgerPostingService } from './services/ledger-posting.service.js';
  */
 @Injectable()
 export class TransactionsService {
+  private readonly logger = new Logger(TransactionsService.name);
+
   constructor(
     @InjectRepository(Transaction)
     private readonly txRepo: Repository<Transaction>,
@@ -42,6 +61,7 @@ export class TransactionsService {
     private readonly idempotencyRepo: Repository<IdempotencyKey>,
     private readonly dataSource: DataSource,
     private readonly ledgerPostingService: LedgerPostingService,
+    private readonly auditService: AuditService,
   ) {}
 
   async getTransactionById(userId: string, transactionId: string) {
@@ -50,9 +70,10 @@ export class TransactionsService {
       .innerJoin('transaction.fromAccount', 'fromAccount')
       .innerJoin('transaction.toAccount', 'toAccount')
       .where('transaction.id = :transactionId', { transactionId })
+      // Giao dịch failed chỉ bên gửi xem được
       .andWhere(
-        '(fromAccount.userId = :userId OR toAccount.userId = :userId)',
-        { userId },
+        '(fromAccount.userId = :userId OR (toAccount.userId = :userId AND transaction.status <> :failed))',
+        { userId, failed: TransactionStatus.FAILED },
       )
       .getOne();
 
@@ -108,6 +129,10 @@ export class TransactionsService {
       .leftJoinAndSelect('toAccount.user', 'toUser')
       .where('(tx.fromAccountId = :accountId OR tx.toAccountId = :accountId)', {
         accountId: targetAccountId,
+      })
+      // Giao dịch failed chỉ hiện ở lịch sử bên gửi
+      .andWhere('(tx.status <> :failed OR tx.fromAccount = :accountId)', {
+        failed: TransactionStatus.FAILED,
       });
 
     // 3. apply time
@@ -137,10 +162,11 @@ export class TransactionsService {
   }
 
   async transfer(
-    userId: string,
+    user: RequestUser,
     idempotencyKey: string | undefined,
     dto: TransferDto,
   ) {
+    const userId = user.id;
     // 1. Kiểm tra Idempotency-Key
     if (!idempotencyKey) {
       throw new AppException(
@@ -163,6 +189,10 @@ export class TransactionsService {
       .digest('hex');
 
     // transfer
+    // Chỉ có giá trị sau khi đã khóa được cả hai tài khoản và nguồn thuộc user
+    let parties: TransferParties | null = null;
+    let failure: unknown;
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -197,6 +227,14 @@ export class TransactionsService {
           );
         }
         await queryRunner.commitTransaction();
+        // Lần gửi trước thất bại nghiệp vụ: trả lại đúng lỗi 422 đã lưu
+        if (existingKey.responseCode === HttpStatus.UNPROCESSABLE_ENTITY) {
+          const saved = existingKey.responseBody as {
+            code: string;
+            message: string;
+          };
+          throw new AppException(saved.code, saved.message, existingKey.responseCode);
+        }
         return existingKey.responseBody;
       }
       const idempotency = await idempotencyRepo.findOneByOrFail({
@@ -265,6 +303,14 @@ export class TransactionsService {
           'Không tìm thấy tài khoản người nhận',
           HttpStatus.NOT_FOUND,
         );
+
+      parties = {
+        fromAccountId: fromAccount.id,
+        toAccountId: toAccount.id,
+        lockOrder: shouldLockFromFirst
+          ? [fromAccount.id, toAccount.id]
+          : [toAccount.id, fromAccount.id],
+      };
 
       // 4. Validate sau khi lock (đọc data mới nhất)
       if (fromAccount.status !== AccountStatus.ACTIVE) {
@@ -346,14 +392,138 @@ export class TransactionsService {
       );
       await idempotencyRepo.save(idempotency);
 
+      await this.auditService.log(queryRunner.manager, {
+        actorId: userId,
+        actorRole: user.role,
+        action: AuditAction.TRANSFER_COMPLETED,
+        targetType: 'transaction',
+        targetId: transaction.id,
+        metadata: {
+          amount: dto.amount,
+          fromAccountId: fromAccount.id,
+          toAccountId: toAccount.id,
+        },
+      });
+
       await queryRunner.commitTransaction();
 
       return idempotency.responseBody;
     } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
+      // Lỗi replay 422 ném ra sau khi đã commit
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
+      failure = error;
     } finally {
       await queryRunner.release();
+    }
+
+    // Lưu sau khi đã rollback và trả connection: không giữ khóa tài khoản,
+    // không chiếm 2 connection cùng lúc khi nhiều request lỗi đồng thời
+    if (
+      parties &&
+      failure instanceof AppException &&
+      FAILED_TRANSFER_CODES.has(failure.code)
+    ) {
+      await this.recordFailedTransfer(
+        user,
+        idempotencyKey,
+        requestHash,
+        dto,
+        parties,
+        failure,
+      );
+    }
+    throw failure;
+  }
+
+  /**
+   * Lưu giao dịch failed kèm failure_reason trong transaction riêng, không ghi sổ cái.
+   * Lưu luôn Idempotency-Key với response 422 để gửi lại cùng key không sinh thêm bản ghi.
+   * Lỗi khi lưu chỉ ghi log, client vẫn nhận lỗi 422 gốc.
+   */
+  private async recordFailedTransfer(
+    user: RequestUser,
+    idempotencyKey: string,
+    requestHash: string,
+    dto: TransferDto,
+    parties: TransferParties,
+    error: AppException,
+  ): Promise<void> {
+    try {
+      await this.dataSource.transaction(async (manager) => {
+        const reservation = await manager
+          .createQueryBuilder()
+          .insert()
+          .into(IdempotencyKey)
+          .values({
+            userId: user.id,
+            key: idempotencyKey,
+            requestHash,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          })
+          .orIgnore()
+          .execute();
+        // Request khác cùng key đã ghi kết quả trong lúc rollback
+        if (reservation.raw.length === 0) return;
+
+        // INSERT transactions khóa KEY SHARE hai tài khoản qua khóa ngoại, theo thứ tự
+        // from rồi to. Khóa trước theo đúng thứ tự của transfer() để không tạo vòng chờ
+        // với lệnh chuyển chiều ngược lại đang giữ FOR UPDATE (deadlock)
+        for (const accountId of parties.lockOrder) {
+          await manager
+            .getRepository(Account)
+            .createQueryBuilder('account')
+            .select('account.id')
+            .where('account.id = :accountId', { accountId })
+            .setLock('for_key_share')
+            .getOne();
+        }
+
+        const transaction = await manager.save(
+          manager.create(Transaction, {
+            type: TransactionType.TRANSFER,
+            status: TransactionStatus.FAILED,
+            fromAccountId: parties.fromAccountId,
+            toAccountId: parties.toAccountId,
+            amount: dto.amount,
+            description: dto.description || null,
+            failureReason: error.code,
+            initiatedBy: user.id,
+            completedAt: null,
+          }),
+        );
+
+        await manager.update(
+          IdempotencyKey,
+          { userId: user.id, key: idempotencyKey },
+          {
+            transactionId: transaction.id,
+            responseCode: error.getStatus(),
+            responseBody: { code: error.code, message: error.message },
+          },
+        );
+
+        await this.auditService.log(manager, {
+          actorId: user.id,
+          actorRole: user.role,
+          action: AuditAction.TRANSFER_FAILED,
+          targetType: 'transaction',
+          targetId: transaction.id,
+          metadata: {
+            amount: dto.amount,
+            reason: error.code,
+            fromAccountId: parties.fromAccountId,
+            toAccountId: parties.toAccountId,
+          },
+        });
+      });
+    } catch (err) {
+      this.logger.error(
+        `Lưu giao dịch failed thất bại (${error.code}): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   }
 }

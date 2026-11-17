@@ -19,6 +19,8 @@ export enum AuditAction {
   USER_UNLOCKED = 'user_unlocked',
   ACCOUNT_FROZEN = 'account_frozen',
   ACCOUNT_UNFROZEN = 'account_unfrozen',
+  TRANSFER_COMPLETED = 'transfer_completed',
+  TRANSFER_FAILED = 'transfer_failed',
 }
 
 export type AuditTargetType = 'user' | 'account' | 'transaction' | 'fraud_flag';

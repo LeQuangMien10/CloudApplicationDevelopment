@@ -1,0 +1,3509 @@
+{
+  "info": {
+    "name": "Banking - Transactions API",
+    "description": "Kiểm thử các API /transactions trên dữ liệu seed (npm run db:reset).\n\nCách chạy: đổi biến baseUrl nếu backend không chạy ở http://localhost:3001/api, rồi chạy cả collection theo thứ tự bằng Runner. Thư mục \"0. Chuẩn bị\" phải chạy trước vì nó lưu token và id vào biến collection.\n\nThư mục 1.7 cần sửa DB bằng tay, bỏ chọn khi chạy Runner nếu chưa chuẩn bị.\n\nCollection tạo giao dịch thật: An chuyển cho Bình một ít tiền và sinh 1 giao dịch failed mỗi lần chạy.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. Chuẩn bị (chạy trước)",
+      "description": "Đăng nhập 3 khách hàng seed và admin, lưu token, id và số tài khoản vào biến collection.",
+      "item": [
+        {
+          "name": "Đăng nhập An (người gửi)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"an@example.com\",\n  \"password\": \"Password@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const { accessToken } = pm.response.json();",
+                  "pm.test('Có accessToken', () => pm.expect(accessToken).to.be.a('string'));",
+                  "pm.collectionVariables.set('anToken', accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Đăng nhập Bình (người nhận)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"binh@example.com\",\n  \"password\": \"Password@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const { accessToken } = pm.response.json();",
+                  "pm.test('Có accessToken', () => pm.expect(accessToken).to.be.a('string'));",
+                  "pm.collectionVariables.set('binhToken', accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Đăng nhập Chi (người ngoài)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"chi@example.com\",\n  \"password\": \"Password@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const { accessToken } = pm.response.json();",
+                  "pm.test('Có accessToken', () => pm.expect(accessToken).to.be.a('string'));",
+                  "pm.collectionVariables.set('chiToken', accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Đăng nhập Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@bank.local\",\n  \"password\": \"Admin@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const { accessToken } = pm.response.json();",
+                  "pm.test('Có accessToken', () => pm.expect(accessToken).to.be.a('string'));",
+                  "pm.collectionVariables.set('adminToken', accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tài khoản của An",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const acc = pm.response.json()[0];",
+                  "pm.test('Có tài khoản', () => pm.expect(acc).to.have.property('id'));",
+                  "pm.collectionVariables.set('anAccountId', acc.id);",
+                  "pm.collectionVariables.set('anAccountNumber', acc.accountNumber);",
+                  "pm.collectionVariables.set('anBalance', acc.balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tài khoản của Bình",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{binhToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const acc = pm.response.json()[0];",
+                  "pm.test('Có tài khoản', () => pm.expect(acc).to.have.property('id'));",
+                  "pm.collectionVariables.set('binhAccountId', acc.id);",
+                  "pm.collectionVariables.set('binhAccountNumber', acc.accountNumber);",
+                  "pm.collectionVariables.set('binhBalance', acc.balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tài khoản của Chi",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{chiToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/accounts/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "accounts",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const acc = pm.response.json()[0];",
+                  "pm.test('Có tài khoản', () => pm.expect(acc).to.have.property('id'));",
+                  "pm.collectionVariables.set('chiAccountId', acc.id);",
+                  "pm.collectionVariables.set('chiAccountNumber', acc.accountNumber);",
+                  "pm.collectionVariables.set('chiBalance', acc.balance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lấy userId của Chi",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{chiToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('chiUserId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. POST /transactions/transfer",
+      "item": [
+        {
+          "name": "1.1 Thành công và idempotency",
+          "item": [
+            {
+              "name": "201 chuyển tiền thành công",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{successKey}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('successKey', 'pm-' + pm.variables.replaceIn('{{$guid}}'));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const cents = (s) => { const [w, f = ''] = String(s).split('.'); return BigInt(w) * BigInt(100) + BigInt((f + '00').slice(0, 2)); };",
+                      "const fmt = (c) => (c / BigInt(100)).toString() + '.' + (c % BigInt(100)).toString().padStart(2, '0');",
+                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                      "const body = pm.response.json();",
+                      "pm.test('message = Giao dịch thành công', () => pm.expect(body.message).to.eql('Giao dịch thành công'));",
+                      "pm.test('transaction completed, đúng số tiền và hai số tài khoản', () => {",
+                      "  pm.expect(body.transaction).to.include({",
+                      "    status: 'completed',",
+                      "    amount: '1000.50',",
+                      "    fromAccountNumber: pm.collectionVariables.get('anAccountNumber'),",
+                      "    toAccountNumber: pm.collectionVariables.get('binhAccountNumber'),",
+                      "  });",
+                      "});",
+                      "pm.test('newBalance = số dư cũ - 1000.50', () => {",
+                      "  const expected = fmt(cents(pm.collectionVariables.get('anBalance')) - cents('1000.50'));",
+                      "  pm.expect(body.newBalance).to.eql(expected);",
+                      "});",
+                      "pm.collectionVariables.set('transactionId', body.transaction.id);",
+                      "pm.collectionVariables.set('anBalance', body.newBalance);",
+                      "pm.collectionVariables.set('binhBalance', fmt(cents(pm.collectionVariables.get('binhBalance')) + cents('1000.50')));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "201 gửi lại cùng key, cùng body: trả kết quả cũ, không trừ tiền lần 2",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{successKey}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                      "const body = pm.response.json();",
+                      "pm.test('Cùng transaction id', () => pm.expect(body.transaction.id).to.eql(pm.collectionVariables.get('transactionId')));",
+                      "pm.test('newBalance giữ nguyên', () => pm.expect(body.newBalance).to.eql(pm.collectionVariables.get('anBalance')));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Số dư An không đổi sau khi gửi lại",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/me",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "me"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.test('balance = newBalance lần đầu', () => pm.expect(pm.response.json()[0].balance).to.eql(pm.collectionVariables.get('anBalance')));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Số dư Bình được cộng đúng 1 lần",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{binhToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/me",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "me"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.test('balance = số dư cũ + 1000.50', () => pm.expect(pm.response.json()[0].balance).to.eql(pm.collectionVariables.get('binhBalance')));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "409 IDEMPOTENCY_CONFLICT: cùng key, khác body",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{successKey}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"2000.00\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                      "pm.test('code = IDEMPOTENCY_CONFLICT', () => pm.expect(pm.response.json().code).to.eql('IDEMPOTENCY_CONFLICT'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "201 key của user khác không ảnh hưởng: Bình dùng lại key của An",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{binhToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{successKey}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{binhAccountId}}\",\n  \"toAccountNumber\": \"{{anAccountNumber}}\",\n  \"amount\": \"1.00\",\n  \"description\": \"Postman: Bình trả lại 1.00\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const cents = (s) => { const [w, f = ''] = String(s).split('.'); return BigInt(w) * BigInt(100) + BigInt((f + '00').slice(0, 2)); };",
+                      "const fmt = (c) => (c / BigInt(100)).toString() + '.' + (c % BigInt(100)).toString().padStart(2, '0');",
+                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                      "const body = pm.response.json();",
+                      "pm.test('Giao dịch mới, khác của An', () => pm.expect(body.transaction.id).to.not.eql(pm.collectionVariables.get('transactionId')));",
+                      "pm.collectionVariables.set('anBalance', fmt(cents(pm.collectionVariables.get('anBalance')) + cents('1.00')));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "201 không gửi description (không bắt buộc)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"0.01\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const cents = (s) => { const [w, f = ''] = String(s).split('.'); return BigInt(w) * BigInt(100) + BigInt((f + '00').slice(0, 2)); };",
+                      "const fmt = (c) => (c / BigInt(100)).toString() + '.' + (c % BigInt(100)).toString().padStart(2, '0');",
+                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                      "pm.test('description = null', () => pm.expect(pm.response.json().transaction.description).to.eql(null));",
+                      "pm.collectionVariables.set('anBalance', pm.response.json().newBalance);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "201 amount số nguyên, không có phần thập phân",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                      "pm.test('amount chuẩn hóa thành 1.00', () => pm.expect(pm.response.json().transaction.amount).to.be.oneOf(['1', '1.00']));",
+                      "pm.collectionVariables.set('anBalance', pm.response.json().newBalance);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "201 Idempotency-Key dài đúng 64 ký tự",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{key64}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"0.01\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('key64', ('pm-' + pm.variables.replaceIn('{{$guid}}') + 'x'.repeat(64)).slice(0, 64));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                      "pm.collectionVariables.set('anBalance', pm.response.json().newBalance);"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "1.2 Header Idempotency-Key (400)",
+          "item": [
+            {
+              "name": "400 IDEMPOTENCY_KEY_REQUIRED: thiếu header",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = IDEMPOTENCY_KEY_REQUIRED', () => pm.expect(pm.response.json().code).to.eql('IDEMPOTENCY_KEY_REQUIRED'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "400 IDEMPOTENCY_KEY_REQUIRED: header rỗng",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": ""
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = IDEMPOTENCY_KEY_REQUIRED', () => pm.expect(pm.response.json().code).to.eql('IDEMPOTENCY_KEY_REQUIRED'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "400 VALIDATION_ERROR: key dài 65 ký tự",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{key65}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('key65', 'k'.repeat(65));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('details nhắc tới 64 ký tự', () => pm.expect(pm.response.json().details.join(' ')).to.include('64'));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "1.3 Xác thực (401)",
+          "item": [
+            {
+              "name": "401 UNAUTHORIZED: không có token",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+                      "pm.test('code = UNAUTHORIZED', () => pm.expect(pm.response.json().code).to.eql('UNAUTHORIZED'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "401 UNAUTHORIZED: token sai",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer abc.def.ghi"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+                      "pm.test('code = UNAUTHORIZED', () => pm.expect(pm.response.json().code).to.eql('UNAUTHORIZED'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Admin khóa user Chi",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/users/{{chiUserId}}/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "users",
+                    "{{chiUserId}}",
+                    "status"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"locked\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.test('status = locked', () => pm.expect(pm.response.json().status).to.eql('locked'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "401 USER_LOCKED: user bị khóa dùng token cấp trước đó",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{chiToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{chiAccountId}}\",\n  \"toAccountNumber\": \"{{anAccountNumber}}\",\n  \"amount\": \"1.00\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+                      "pm.test('code = USER_LOCKED', () => pm.expect(pm.response.json().code).to.eql('USER_LOCKED'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Admin mở khóa user Chi (dọn dẹp)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/users/{{chiUserId}}/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "users",
+                    "{{chiUserId}}",
+                    "status"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"active\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.test('status = active', () => pm.expect(pm.response.json().status).to.eql('active'));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "1.4 Dữ liệu không hợp lệ (400)",
+          "item": [
+            {
+              "name": "400 VALIDATION_ERROR: body rỗng",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('details là mảng lỗi', () => pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "400 VALIDATION_ERROR: fromAccountId không phải UUID",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"abc\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('details là mảng lỗi', () => pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty);",
+                      "pm.test('details nhắc tới fromAccountId', () => pm.expect(pm.response.json().details.join(' ')).to.include('fromAccountId'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "400 VALIDATION_ERROR: toAccountNumber 11 chữ số",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"10000000000\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('details là mảng lỗi', () => pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty);",
+                      "pm.test('details nhắc tới toAccountNumber', () => pm.expect(pm.response.json().details.join(' ')).to.include('toAccountNumber'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "400 VALIDATION_ERROR: toAccountNumber có chữ",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"10000000000a\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('details là mảng lỗi', () => pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty);",
+                      "pm.test('details nhắc tới toAccountNumber', () => pm.expect(pm.response.json().details.join(' ')).to.include('toAccountNumber'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "400 VALIDATION_ERROR: amount = 0",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"0\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('details là mảng lỗi', () => pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty);",
+                      "pm.test('details nhắc tới amount', () => pm.expect(pm.response.json().details.join(' ')).to.include('amount'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "400 VALIDATION_ERROR: amount = 0.00",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"0.00\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('details là mảng lỗi', () => pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty);",
+                      "pm.test('details nhắc tới amount', () => pm.expect(pm.response.json().details.join(' ')).to.include('amount'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "400 VALIDATION_ERROR: amount âm",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"-100.00\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('details là mảng lỗi', () => pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty);",
+                      "pm.test('details nhắc tới amount', () => pm.expect(pm.response.json().details.join(' ')).to.include('amount'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "400 VALIDATION_ERROR: amount 3 chữ số thập phân",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"10.123\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('details là mảng lỗi', () => pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty);",
+                      "pm.test('details nhắc tới amount', () => pm.expect(pm.response.json().details.join(' ')).to.include('amount'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "400 VALIDATION_ERROR: amount không phải số",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"abc\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('details là mảng lỗi', () => pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty);",
+                      "pm.test('details nhắc tới amount', () => pm.expect(pm.response.json().details.join(' ')).to.include('amount'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "400 VALIDATION_ERROR: amount gửi dạng number thay vì chuỗi",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": 1000.5,\n  \"description\": \"Postman: amount là number\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('details là mảng lỗi', () => pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty);",
+                      "pm.test('details nhắc tới amount', () => pm.expect(pm.response.json().details.join(' ')).to.include('amount'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "400 VALIDATION_ERROR: amount 17 chữ số phần nguyên (vượt giới hạn)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"10000000000000000.00\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('details là mảng lỗi', () => pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty);",
+                      "pm.test('details nhắc tới amount', () => pm.expect(pm.response.json().details.join(' ')).to.include('amount'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "400 VALIDATION_ERROR: description dài 141 ký tự",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('details là mảng lỗi', () => pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty);",
+                      "pm.test('details nhắc tới description', () => pm.expect(pm.response.json().details.join(' ')).to.include('description'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "400 VALIDATION_ERROR: có trường lạ không khai báo",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\",\n  \"toAccountId\": \"{{binhAccountId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                      "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('details là mảng lỗi', () => pm.expect(pm.response.json().details).to.be.an('array').that.is.not.empty);"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "1.5 Không tìm thấy tài khoản (404)",
+          "item": [
+            {
+              "name": "404 SENDER_ACCOUNT_NOT_FOUND: nguồn là tài khoản của người khác",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{binhAccountId}}\",\n  \"toAccountNumber\": \"{{chiAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                      "pm.test('code = SENDER_ACCOUNT_NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql('SENDER_ACCOUNT_NOT_FOUND'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "404 SENDER_ACCOUNT_NOT_FOUND: nguồn không tồn tại",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"00000000-0000-4000-8000-000000000000\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                      "pm.test('code = SENDER_ACCOUNT_NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql('SENDER_ACCOUNT_NOT_FOUND'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "404 TARGET_ACCOUNT_NOT_FOUND: số tài khoản đích không tồn tại",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"999999999999\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                      "pm.test('code = TARGET_ACCOUNT_NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql('TARGET_ACCOUNT_NOT_FOUND'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "1.6 Lỗi nghiệp vụ (422) và lưu giao dịch failed",
+          "item": [
+            {
+              "name": "422 SAME_ACCOUNT: chuyển cho chính mình",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{anAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                      "pm.test('code = SAME_ACCOUNT', () => pm.expect(pm.response.json().code).to.eql('SAME_ACCOUNT'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "422 INSUFFICIENT_FUNDS: số tiền lớn nhất hợp lệ 9999999999999999.99",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{failKey}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"9999999999999999.99\",\n  \"description\": \"{{failDescription}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('failKey', 'pm-' + pm.variables.replaceIn('{{$guid}}'));",
+                      "pm.collectionVariables.set('failDescription', 'Postman F4 ' + pm.collectionVariables.get('failKey').slice(3, 39));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                      "pm.test('code = INSUFFICIENT_FUNDS', () => pm.expect(pm.response.json().code).to.eql('INSUFFICIENT_FUNDS'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.collectionVariables.set('failMessage', pm.response.json().message);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "422 gửi lại cùng key sau khi thất bại: trả lại đúng lỗi cũ",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{failKey}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"9999999999999999.99\",\n  \"description\": \"{{failDescription}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                      "pm.test('code = INSUFFICIENT_FUNDS', () => pm.expect(pm.response.json().code).to.eql('INSUFFICIENT_FUNDS'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));",
+                      "pm.test('Cùng message với lần đầu', () => pm.expect(pm.response.json().message).to.eql(pm.collectionVariables.get('failMessage')));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "409 IDEMPOTENCY_CONFLICT: dùng key đã thất bại cho body khác",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{failKey}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1.00\",\n  \"description\": \"Postman: chuyển tiền\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                      "pm.test('code = IDEMPOTENCY_CONFLICT', () => pm.expect(pm.response.json().code).to.eql('IDEMPOTENCY_CONFLICT'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Lịch sử An có đúng 1 giao dịch failed kèm failureReason",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions?accountId={{anAccountId}}&limit=100",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions"
+                  ],
+                  "query": [
+                    {
+                      "key": "accountId",
+                      "value": "{{anAccountId}}"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "100"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "const desc = pm.collectionVariables.get('failDescription');",
+                      "const failed = pm.response.json().transactions.filter((t) => t.description === desc);",
+                      "pm.test('Đúng 1 bản ghi (gửi lại không sinh thêm)', () => pm.expect(failed).to.have.lengthOf(1));",
+                      "pm.test('status failed, failureReason INSUFFICIENT_FUNDS, chưa hoàn tất', () => {",
+                      "  pm.expect(failed[0]).to.include({ status: 'failed', failureReason: 'INSUFFICIENT_FUNDS', completedAt: null });",
+                      "});",
+                      "if (failed[0]) pm.collectionVariables.set('failedTransactionId', failed[0].id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Số dư An không đổi sau giao dịch failed",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/me",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "me"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                      "pm.test('balance giữ nguyên', () => pm.expect(pm.response.json()[0].balance).to.eql(pm.collectionVariables.get('anBalance')));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "1.7 Tài khoản bị đóng băng (422, cần chuẩn bị DB)",
+          "description": "Hai request này cần sửa DB bằng tay trước khi gửi (xem mô tả từng request). Khi chạy cả collection bằng Runner, bỏ chọn thư mục này nếu chưa chuẩn bị DB.",
+          "item": [
+            {
+              "name": "422 SENDER_ACCOUNT_NOT_ACTIVE: tài khoản nguồn bị đóng băng",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "description": "Chưa có API đóng băng tài khoản (F3). Trước khi gửi, chạy SQL:\n\nUPDATE accounts SET status = 'frozen' WHERE account_number = '100000000001';\n\nGửi xong thì mở lại:\n\nUPDATE accounts SET status = 'active' WHERE account_number = '100000000001';",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: nguồn bị đóng băng\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                      "pm.test('code = SENDER_ACCOUNT_NOT_ACTIVE', () => pm.expect(pm.response.json().code).to.eql('SENDER_ACCOUNT_NOT_ACTIVE'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "422 TARGET_ACCOUNT_NOT_ACTIVE: tài khoản đích bị đóng băng",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{anToken}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transactions/transfer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transactions",
+                    "transfer"
+                  ]
+                },
+                "description": "Chưa có API đóng băng tài khoản (F3). Trước khi gửi, chạy SQL:\n\nUPDATE accounts SET status = 'frozen' WHERE account_number = '100000000002';\n\nGửi xong thì mở lại:\n\nUPDATE accounts SET status = 'active' WHERE account_number = '100000000002';",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fromAccountId\": \"{{anAccountId}}\",\n  \"toAccountNumber\": \"{{binhAccountNumber}}\",\n  \"amount\": \"1000.50\",\n  \"description\": \"Postman: đích bị đóng băng\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                      "pm.test('code = TARGET_ACCOUNT_NOT_ACTIVE', () => pm.expect(pm.response.json().code).to.eql('TARGET_ACCOUNT_NOT_ACTIVE'));",
+                      "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. GET /transactions",
+      "item": [
+        {
+          "name": "200 mặc định: page 1, limit 20, mới nhất trước",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Có transactions, total, page, limit', () => {",
+                  "  pm.expect(body.transactions).to.be.an('array');",
+                  "  pm.expect(body).to.have.property('total').that.is.a('number');",
+                  "  pm.expect(body).to.have.property('page');",
+                  "  pm.expect(body).to.have.property('limit');",
+                  "});",
+                  "pm.test('page = 1, limit = 20', () => pm.expect([body.page, body.limit]).to.eql([1, 20]));",
+                  "pm.test('Tối đa 20 phần tử', () => pm.expect(body.transactions.length).to.be.at.most(20));",
+                  "pm.test('Sắp xếp createdAt giảm dần', () => {",
+                  "  const t = body.transactions.map((x) => new Date(x.createdAt).getTime());",
+                  "  pm.expect(t).to.eql([...t].sort((a, b) => b - a));",
+                  "});",
+                  "pm.test('Có giao dịch vừa chuyển thành công', () => {",
+                  "  pm.expect(body.transactions.map((x) => x.id)).to.include(pm.collectionVariables.get('transactionId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 phân trang page=2&limit=2",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?accountId={{anAccountId}}&page=2&limit=2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "accountId",
+                  "value": "{{anAccountId}}"
+                },
+                {
+                  "key": "page",
+                  "value": "2"
+                },
+                {
+                  "key": "limit",
+                  "value": "2"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Có transactions, total, page, limit', () => {",
+                  "  pm.expect(body.transactions).to.be.an('array');",
+                  "  pm.expect(body).to.have.property('total').that.is.a('number');",
+                  "  pm.expect(body).to.have.property('page');",
+                  "  pm.expect(body).to.have.property('limit');",
+                  "});",
+                  "pm.test('page = 2, limit = 2, tối đa 2 phần tử', () => {",
+                  "  pm.expect([body.page, body.limit]).to.eql([2, 2]);",
+                  "  pm.expect(body.transactions.length).to.be.at.most(2);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 lọc from/to quanh hôm nay có giao dịch vừa tạo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?accountId={{anAccountId}}&from={{fromDate}}&to={{toDate}}&limit=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "accountId",
+                  "value": "{{anAccountId}}"
+                },
+                {
+                  "key": "from",
+                  "value": "{{fromDate}}"
+                },
+                {
+                  "key": "to",
+                  "value": "{{toDate}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = (offset) => { const x = new Date(); x.setDate(x.getDate() + offset); return x.toISOString().slice(0, 10); };",
+                  "pm.collectionVariables.set('fromDate', d(-1));",
+                  "pm.collectionVariables.set('toDate', d(1));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Có transactions, total, page, limit', () => {",
+                  "  pm.expect(body.transactions).to.be.an('array');",
+                  "  pm.expect(body).to.have.property('total').that.is.a('number');",
+                  "  pm.expect(body).to.have.property('page');",
+                  "  pm.expect(body).to.have.property('limit');",
+                  "});",
+                  "pm.test('Có giao dịch vừa chuyển', () => pm.expect(body.transactions.map((x) => x.id)).to.include(pm.collectionVariables.get('transactionId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 lọc khoảng ngày tương lai: rỗng",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?from=2099-01-01&to=2099-12-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2099-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2099-12-31"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Có transactions, total, page, limit', () => {",
+                  "  pm.expect(body.transactions).to.be.an('array');",
+                  "  pm.expect(body).to.have.property('total').that.is.a('number');",
+                  "  pm.expect(body).to.have.property('page');",
+                  "  pm.expect(body).to.have.property('limit');",
+                  "});",
+                  "pm.test('total = 0', () => pm.expect(body.total).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 bên nhận (Bình) thấy giao dịch tiền vào",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{binhToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?limit=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Có transactions, total, page, limit', () => {",
+                  "  pm.expect(body.transactions).to.be.an('array');",
+                  "  pm.expect(body).to.have.property('total').that.is.a('number');",
+                  "  pm.expect(body).to.have.property('page');",
+                  "  pm.expect(body).to.have.property('limit');",
+                  "});",
+                  "pm.test('Có giao dịch An chuyển tới', () => pm.expect(body.transactions.map((x) => x.id)).to.include(pm.collectionVariables.get('transactionId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 bên nhận (Bình) KHÔNG thấy giao dịch failed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{binhToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?limit=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Có transactions, total, page, limit', () => {",
+                  "  pm.expect(body.transactions).to.be.an('array');",
+                  "  pm.expect(body).to.have.property('total').that.is.a('number');",
+                  "  pm.expect(body).to.have.property('page');",
+                  "  pm.expect(body).to.have.property('limit');",
+                  "});",
+                  "pm.test('Không có giao dịch failed An định chuyển', () => pm.expect(body.transactions.map((x) => x.id)).to.not.include(pm.collectionVariables.get('failedTransactionId')));",
+                  "pm.test('Không có giao dịch failed nào mà Bình là bên nhận', () => {",
+                  "  const bad = body.transactions.filter((x) => x.status === 'failed' && x.fromAccountId !== pm.collectionVariables.get('binhAccountId'));",
+                  "  pm.expect(bad).to.be.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 ACCOUNT_NOT_FOUND: accountId của người khác",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?accountId={{binhAccountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "accountId",
+                  "value": "{{binhAccountId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "pm.test('code = ACCOUNT_NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql('ACCOUNT_NOT_FOUND'));",
+                  "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 VALIDATION_ERROR: limit = 101",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?limit=101",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "101"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                  "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 VALIDATION_ERROR: page = 0",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?page=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                  "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 VALIDATION_ERROR: accountId không phải UUID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?accountId=abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "accountId",
+                  "value": "abc"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                  "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 VALIDATION_ERROR: from sai định dạng ngày",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?from=07-11-2026",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "07-11-2026"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                  "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 VALIDATION_ERROR: tham số lạ",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?foo=bar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "foo",
+                  "value": "bar"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('code = VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                  "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "401 UNAUTHORIZED: không có token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+                  "pm.test('code = UNAUTHORIZED', () => pm.expect(pm.response.json().code).to.eql('UNAUTHORIZED'));",
+                  "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. GET /transactions/:id",
+      "item": [
+        {
+          "name": "200 bên gửi xem giao dịch completed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json();",
+                  "pm.test('Đúng id, completed, đúng hai tài khoản', () => {",
+                  "  pm.expect(t).to.include({ id: pm.collectionVariables.get('transactionId'), status: 'completed', amount: '1000.50', failureReason: null,",
+                  "    fromAccountId: pm.collectionVariables.get('anAccountId'), toAccountId: pm.collectionVariables.get('binhAccountId') });",
+                  "});",
+                  "pm.test('Có completedAt', () => pm.expect(t.completedAt).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 bên nhận xem giao dịch completed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{binhToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Đúng id', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('transactionId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 TRANSACTION_NOT_FOUND: người ngoài (Chi) xem giao dịch",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{chiToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "pm.test('code = TRANSACTION_NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql('TRANSACTION_NOT_FOUND'));",
+                  "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 bên gửi xem giao dịch failed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{failedTransactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{failedTransactionId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('failed, failureReason INSUFFICIENT_FUNDS', () => pm.expect(pm.response.json()).to.include({ status: 'failed', failureReason: 'INSUFFICIENT_FUNDS', completedAt: null }));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 TRANSACTION_NOT_FOUND: bên nhận xem giao dịch failed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{binhToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{failedTransactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{failedTransactionId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "pm.test('code = TRANSACTION_NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql('TRANSACTION_NOT_FOUND'));",
+                  "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 TRANSACTION_NOT_FOUND: id không tồn tại",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/00000000-0000-4000-8000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "00000000-0000-4000-8000-000000000000"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "pm.test('code = TRANSACTION_NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql('TRANSACTION_NOT_FOUND'));",
+                  "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 id không phải UUID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{anToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "abc"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "401 UNAUTHORIZED: không có token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+                  "pm.test('code = UNAUTHORIZED', () => pm.expect(pm.response.json().code).to.eql('UNAUTHORIZED'));",
+                  "pm.test('Có requestId', () => pm.expect(pm.response.json().requestId).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001/api"
+    },
+    {
+      "key": "anToken",
+      "value": ""
+    },
+    {
+      "key": "binhToken",
+      "value": ""
+    },
+    {
+      "key": "chiToken",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "chiUserId",
+      "value": ""
+    },
+    {
+      "key": "anAccountId",
+      "value": ""
+    },
+    {
+      "key": "anAccountNumber",
+      "value": ""
+    },
+    {
+      "key": "anBalance",
+      "value": ""
+    },
+    {
+      "key": "binhAccountId",
+      "value": ""
+    },
+    {
+      "key": "binhAccountNumber",
+      "value": ""
+    },
+    {
+      "key": "binhBalance",
+      "value": ""
+    },
+    {
+      "key": "chiAccountId",
+      "value": ""
+    },
+    {
+      "key": "chiAccountNumber",
+      "value": ""
+    },
+    {
+      "key": "chiBalance",
+      "value": ""
+    },
+    {
+      "key": "successKey",
+      "value": ""
+    },
+    {
+      "key": "transactionId",
+      "value": ""
+    },
+    {
+      "key": "key64",
+      "value": ""
+    },
+    {
+      "key": "key65",
+      "value": ""
+    },
+    {
+      "key": "failKey",
+      "value": ""
+    },
+    {
+      "key": "failDescription",
+      "value": ""
+    },
+    {
+      "key": "failMessage",
+      "value": ""
+    },
+    {
+      "key": "failedTransactionId",
+      "value": ""
+    },
+    {
+      "key": "fromDate",
+      "value": ""
+    },
+    {
+      "key": "toDate",
+      "value": ""
+    }
+  ]
+}
