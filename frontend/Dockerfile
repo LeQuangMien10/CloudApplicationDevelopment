@@ -1,6 +1,6 @@
 FROM node:22-slim AS build
 WORKDIR /app
-COPY package*.json .npmrc ./
+COPY package*.json ./
 RUN npm ci
 COPY . .
 # Gọi API cùng địa chỉ với giao diện, nginx chuyển /api sang backend. Không phụ thuộc IP server, không cần CORS
