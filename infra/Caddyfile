@@ -1,0 +1,7 @@
+# Caddy đứng trước nginx (frontend), tự xin và gia hạn chứng chỉ HTTPS từ Let's Encrypt.
+# DOMAIN lấy từ .env trên server (ví dụ banking-nhom5.duckdns.org).
+# Chạy local không đặt DOMAIN thì dùng localhost với chứng chỉ tự ký.
+{$DOMAIN:localhost} {
+	encode zstd gzip
+	reverse_proxy frontend:80
+}

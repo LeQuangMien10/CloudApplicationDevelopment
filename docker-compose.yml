@@ -1,6 +1,10 @@
 # Chạy toàn bộ: docker compose up -d --build
 # Chỉ chạy DB để dev backend trên máy: docker compose up -d db
-# Giao diện: http://localhost:8080 (nginx, /api chuyển sang backend)
+# Giao diện: https://localhost (Caddy, chứng chỉ tự ký) hoặc http://localhost:8080 (nginx trực tiếp)
+# Trên server: đặt DOMAIN trong .env, Caddy tự xin chứng chỉ Let's Encrypt cho domain đó
+#
+# Chỉ Caddy mở cổng ra ngoài (80, 443). db, backend, frontend chỉ nghe ở 127.0.0.1,
+# nên trên server không truy cập thẳng được từ Internet, chỉ đi qua Caddy.
 services:
   db:
     image: postgres:16-alpine
@@ -10,7 +14,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-bank_dev_password}
       POSTGRES_DB: ${DB_NAME:-banking}
     ports:
-      - "${DB_PORT:-5433}:5432"
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -33,7 +37,7 @@ services:
       # Mặc định chỉ để dev chạy được khi chưa có .env. Trên cloud bắt buộc đặt trong .env
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me}
     ports:
-      - "${PORT:-3000}:3000"
+      - "127.0.0.1:${PORT:-3000}:3000"
     depends_on:
       db:
         condition: service_healthy
@@ -43,10 +47,31 @@ services:
     build: ./frontend
     container_name: banking-frontend
     ports:
-      - "${FRONTEND_PORT:-8080}:80"
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:80"
     depends_on:
       - backend
     restart: unless-stopped
 
+  caddy:
+    image: caddy:2.10-alpine
+    container_name: banking-caddy
+    environment:
+      # Không đặt thì dùng localhost với chứng chỉ tự ký (chạy local)
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Chứa chứng chỉ đã xin. Xóa volume này thì Caddy phải xin lại (Let's Encrypt giới hạn số lần xin)
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:
