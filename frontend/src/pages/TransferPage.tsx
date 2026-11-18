@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { api } from "../services/api";
+import { api, ApiError } from "../services/api";
 import {
   Send,
   CheckCircle2,
@@ -32,6 +32,8 @@ export const TransferPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  // true khi lỗi chưa rõ kết quả (mạng, 5xx) và key cũ được giữ để thử lại
+  const [keyKept, setKeyKept] = useState(false);
 
   const initNewKey = () => setIdempotencyKey(uuidv4());
 
@@ -129,16 +131,26 @@ export const TransferPage: React.FC = () => {
       setRecipientName(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "";
-      let friendlyError = msg || "Giao dịch chuyển tiền thất bại";
-      if (msg.includes("SAME_ACCOUNT"))
-        friendlyError = "Không thể tự chuyển tiền cho chính tài khoản nguồn";
-      else if (msg.includes("INSUFFICIENT_FUNDS"))
-        friendlyError = "Số dư trong tài khoản không đủ để thực hiện giao dịch";
-      else if (msg.includes("TARGET_ACCOUNT_NOT_FOUND"))
-        friendlyError = "Số tài khoản thụ hưởng không tồn tại";
-      else if (msg.includes("TARGET_ACCOUNT_NOT_ACTIVE"))
-        friendlyError = "Tài khoản thụ hưởng đang bị khóa hoặc đóng";
-      setErrorMessage(friendlyError);
+      const code = err instanceof ApiError ? err.code : undefined;
+      const status = err instanceof ApiError ? err.status : undefined;
+
+      // Server đã trả lỗi 4xx: lệnh này đã kết thúc (422 còn được lưu lại theo key),
+      // nên lần gửi sau phải dùng key mới, nếu không sẽ nhận lại đúng lỗi cũ hoặc 409.
+      // Lỗi mạng, timeout, 5xx thì giữ key: có thể server đã trừ tiền, gửi lại cùng key mới an toàn.
+      const canRetrySameKey = status === undefined || status >= 500;
+      if (!canRetrySameKey) initNewKey();
+      setKeyKept(canRetrySameKey);
+
+      const friendlyErrors: Record<string, string> = {
+        SAME_ACCOUNT: "Không thể tự chuyển tiền cho chính tài khoản nguồn",
+        INSUFFICIENT_FUNDS: "Số dư trong tài khoản không đủ để thực hiện giao dịch",
+        TARGET_ACCOUNT_NOT_FOUND: "Số tài khoản thụ hưởng không tồn tại",
+        TARGET_ACCOUNT_NOT_ACTIVE: "Tài khoản thụ hưởng đang bị khóa hoặc đóng",
+        SENDER_ACCOUNT_NOT_ACTIVE: "Tài khoản của bạn đang bị khóa hoặc đóng",
+      };
+      setErrorMessage(
+        (code && friendlyErrors[code]) || msg || "Giao dịch chuyển tiền thất bại",
+      );
     } finally {
       setLoading(false);
     }
@@ -187,10 +199,12 @@ export const TransferPage: React.FC = () => {
           />
           <div>
             <p className="font-semibold">{errorMessage}</p>
-            <p className="text-xs text-rose-600 mt-1">
-              * Khóa chống trùng lặp ({idempotencyKey.slice(0, 8)}...) được giữ
-              nguyên để thử lại an toàn.
-            </p>
+            {keyKept && (
+              <p className="text-xs text-rose-600 mt-1">
+                * Khóa chống trùng lặp ({idempotencyKey.slice(0, 8)}...) được giữ
+                nguyên để thử lại an toàn.
+              </p>
+            )}
           </div>
         </div>
       )}

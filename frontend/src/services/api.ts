@@ -8,6 +8,19 @@ export interface ApiErrorResponse {
   details?: unknown;
 }
 
+/** Lỗi đã có response từ server: giữ lại mã lỗi và HTTP status để màn hình xử lý theo từng loại. */
+export class ApiError extends Error {
+  code?: string;
+  status?: number;
+
+  constructor(message: string, code?: string, status?: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
 export const api = axios.create({
   // Prefix /api theo quy ước của nhóm
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
@@ -46,6 +59,6 @@ api.interceptors.response.use(
     }
 
     const message = error.response?.data?.message || error.message || 'Lỗi hệ thống';
-    return Promise.reject(new Error(message));
+    return Promise.reject(new ApiError(message, errorCode, error.response?.status));
   }
 );
