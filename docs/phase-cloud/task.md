@@ -7,7 +7,7 @@ Phụ trách: TV5, TV1 hỗ trợ load test và chi phí.
 | Health check, Dockerfile backend, compose, CI backend | 5 | Xong (#3) |
 | Dockerfile frontend, service frontend trong compose, job CI frontend | 6 | Đang làm, chưa mở PR |
 | EC2, Caddy HTTPS, cảnh báo ngân sách | 6 | Chưa làm |
-| Tự động deploy khi merge `main` | 6 | Chưa làm |
+| Tự động deploy khi merge `main` | 6 | Xong, chờ cấu hình secret (`deploy.yml`) |
 | Service `worker` trong compose | 8 | Chưa làm |
 | Tách bước migration, secret ngoài repo | 9 | Chưa làm |
 | Backup DB, diễn tập khôi phục | 9 | Chưa làm |
