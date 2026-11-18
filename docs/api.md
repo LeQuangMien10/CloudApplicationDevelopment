@@ -8,6 +8,7 @@ Prefix: `/api`. Contract đầy đủ xem trên Swagger: `http://localhost:3000/
 | POST | `/api/auth/login` | Công khai | Đăng nhập, trả JWT | TV2 | Xong |
 | GET | `/api/auth/me` | Đã đăng nhập | Thông tin user lấy từ JWT | TV2 | Xong |
 | GET | `/api/accounts/me` | Customer | Tài khoản và số dư của tôi | TV3 | Xong |
+| GET | `/api/accounts/lookup/:accountNumber` | Đã đăng nhập | Tra cứu tên chủ tài khoản trước khi chuyển khoản | TV4 | Xong |
 | POST | `/api/transactions/transfer` | Customer | Chuyển khoản, bắt buộc header `Idempotency-Key` | TV3 | Xong |
 | GET | `/api/transactions` | Customer | Lịch sử, `?page=&limit=&from=&to=&accountId=` | TV3 | Xong |
 | GET | `/api/transactions/:id` | Customer | Chi tiết và trạng thái giao dịch | TV3 | Xong |
@@ -104,7 +105,13 @@ Mật khẩu ít nhất 8 ký tự, có cả chữ và số. Email được chuy
 **`GET /api/auth/me`** → `200`
 
 ```json
-{ "id": "<uuid>", "role": "customer" }
+{ "id": "<uuid>", "email": "an@example.com", "fullName": "Nguyễn Văn An", "role": "customer" }
+```
+
+**`GET /api/accounts/lookup/100000000002`** → `200`. Màn hình chuyển khoản dùng để hiện tên người nhận. Chỉ trả 3 trường dưới đây, không trả số dư hay email. Số tài khoản không đủ 12 chữ số trả `400 VALIDATION_ERROR`. Không tồn tại hoặc là tài khoản hệ thống `000000000000` thì trả `404 TARGET_ACCOUNT_NOT_FOUND`.
+
+```json
+{ "accountNumber": "100000000002", "accountHolderName": "TRẦN THỊ BÌNH", "status": "active" }
 ```
 
 **`GET /api/admin/users?page=1&limit=20`** → `200`. `page` từ 1, `limit` từ 1 đến 100.
@@ -188,9 +195,13 @@ Idempotency-Key: 6f1c2a7e-4b8d-4c55-9a51-0d6e2b7f3c11
 ```json
 { "transactions": [ { "id": "<uuid>", "type": "transfer", "status": "completed", "fromAccountId": "<uuid>", "toAccountId": "<uuid>",
                       "amount": "1500000.00", "description": "...", "failureReason": null, "initiatedBy": "<uuid>",
-                      "createdAt": "...", "completedAt": "..." } ],
+                      "createdAt": "...", "completedAt": "...",
+                      "fromAccount": { "id": "<uuid>", "accountNumber": "100000000001", "user": { "id": "<uuid>", "fullName": "Nguyễn Văn An" } },
+                      "toAccount": { "id": "<uuid>", "accountNumber": "100000000002", "user": { "id": "<uuid>", "fullName": "Trần Thị Bình" } } } ],
   "total": 2, "page": 1, "limit": 10 }
 ```
+
+`fromAccount`, `toAccount` chỉ có số tài khoản và họ tên để hiển thị, không có số dư, email hay role của bên kia.
 
 `fromAccountId` trùng `id` tài khoản của mình là tiền ra, ngược lại là tiền vào. `type` là `deposit` với tiền nạp từ tài khoản quỹ.
 
@@ -229,7 +240,7 @@ Mỗi response có header `X-Request-Id`. Client có thể tự gửi header nà
 | 404 | `USER_NOT_FOUND` | Admin thao tác trên user không tồn tại |
 | 404 | `ACCOUNT_NOT_FOUND` | Lịch sử giao dịch của tài khoản không tồn tại hoặc không thuộc mình (TV3); operator khóa tài khoản không tồn tại (F3) |
 | 404 | `SENDER_ACCOUNT_NOT_FOUND` | Tài khoản nguồn không tồn tại hoặc không thuộc user đang đăng nhập (TV3) |
-| 404 | `TARGET_ACCOUNT_NOT_FOUND` | Không có tài khoản đích với số tài khoản đã gửi (TV3) |
+| 404 | `TARGET_ACCOUNT_NOT_FOUND` | Không có tài khoản đích với số tài khoản đã gửi (TV3); tra cứu số không tồn tại hoặc tài khoản hệ thống (TV4) |
 | 404 | `TRANSACTION_NOT_FOUND` | Giao dịch không tồn tại, hoặc không phải giao dịch của mình (TV3) |
 | 409 | `EMAIL_ALREADY_EXISTS` | Đăng ký trùng email |
 | 409 | `IDEMPOTENCY_CONFLICT` | Cùng Idempotency-Key nhưng khác nội dung (TV3) |

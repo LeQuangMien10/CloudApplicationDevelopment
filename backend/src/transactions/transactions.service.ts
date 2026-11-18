@@ -123,7 +123,23 @@ export class TransactionsService {
     // 2. Build QueryBuilder
     const queryBuilder = this.txRepo
       .createQueryBuilder('tx')
-      .where('(tx.fromAccount = :accountId OR tx.toAccount = :accountId)', {
+      // Chỉ lấy số tài khoản và họ tên của hai bên để hiển thị.
+      // Không dùng leftJoinAndSelect vì sẽ trả cả số dư, email, role của bên kia.
+      .leftJoin('tx.fromAccount', 'fromAccount')
+      .leftJoin('fromAccount.user', 'fromUser')
+      .leftJoin('tx.toAccount', 'toAccount')
+      .leftJoin('toAccount.user', 'toUser')
+      .addSelect([
+        'fromAccount.id',
+        'fromAccount.accountNumber',
+        'fromUser.id',
+        'fromUser.fullName',
+        'toAccount.id',
+        'toAccount.accountNumber',
+        'toUser.id',
+        'toUser.fullName',
+      ])
+      .where('(tx.fromAccountId = :accountId OR tx.toAccountId = :accountId)', {
         accountId: targetAccountId,
       })
       // Giao dịch failed chỉ hiện ở lịch sử bên gửi

@@ -14,6 +14,8 @@ export interface JwtPayload {
 
 export interface RequestUser {
   id: string;
+  email: string;
+  fullName: string;
   role: UserRole;
 }
 
@@ -47,6 +49,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    return { id: user.id, role: user.role };
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+    };
   }
 }

@@ -147,4 +147,45 @@ export class AccountsService {
       };
     });
   }
+
+  /**
+   * Tra cứu tên chủ tài khoản theo số tài khoản (12 chữ số), dùng ở màn hình chuyển khoản.
+   * Chỉ trả số tài khoản, họ tên, trạng thái. Không trả số dư, email hay id của user.
+   * Tài khoản hệ thống trả 404 như tài khoản không tồn tại.
+   */
+  async lookupByAccountNumber(accountNumber: string) {
+    if (!/^[0-9]{12}$/.test(accountNumber)) {
+      throw new AppException(
+        'VALIDATION_ERROR',
+        'Số tài khoản phải gồm đúng 12 chữ số',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const account = await this.accountsRepository.findOne({
+      select: {
+        id: true,
+        accountNumber: true,
+        status: true,
+        isSystem: true,
+        user: { id: true, fullName: true },
+      },
+      where: { accountNumber },
+      relations: { user: true },
+    });
+
+    if (!account || account.isSystem) {
+      throw new AppException(
+        'TARGET_ACCOUNT_NOT_FOUND',
+        'Số tài khoản thụ hưởng không tồn tại',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return {
+      accountNumber: account.accountNumber,
+      accountHolderName: account.user?.fullName?.toUpperCase() || 'CHỦ TÀI KHOẢN',
+      status: account.status,
+    };
+  }
 }

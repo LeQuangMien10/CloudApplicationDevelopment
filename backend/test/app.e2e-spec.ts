@@ -60,7 +60,12 @@ describe('Khung API (e2e)', () => {
       .get('/api/auth/me')
       .set('Authorization', `Bearer ${login.body.accessToken}`)
       .expect(200);
-    expect(me.body).toEqual({ id: reg.body.id, role: 'customer' });
+    expect(me.body).toEqual({
+      id: reg.body.id,
+      email,
+      fullName: 'E2E User',
+      role: 'customer',
+    });
   });
 
   it('đăng nhập sai mật khẩu trả 401 INVALID_CREDENTIALS', async () => {
