@@ -638,4 +638,32 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
       );
     });
   });
+
+  it('18. lịch sử chỉ trả số tài khoản và họ tên hai bên, không lộ số dư, email, role', async () => {
+    const response = await request(app.getHttpServer())
+      .post(transferPath)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('Idempotency-Key', key())
+      .send(transferBody())
+      .expect(201);
+    const txId = response.body.transaction.id as string;
+
+    const history = await request(app.getHttpServer())
+      .get(`/api/transactions?accountId=${sender.id}&limit=100`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    const tx = history.body.transactions.find(
+      (t: { id: string }) => t.id === txId,
+    );
+    expect(tx.fromAccount).toEqual({
+      id: sender.id,
+      accountNumber: sender.accountNumber,
+      user: { id: senderUserId, fullName: 'Nguyễn Văn An' },
+    });
+    expect(tx.toAccount).toEqual({
+      id: recipient.id,
+      accountNumber: recipient.accountNumber,
+      user: { id: recipient.userId, fullName: 'Trần Thị Bình' },
+    });
+  });
 });

@@ -21,7 +21,7 @@ export class AccountsController {
   getMyAccounts(@CurrentUser() user: RequestUser) {
     return this.accountsService.findByUserId(user.id);
   }
-  // Thêm endpoint tra cứu (đặt bên dưới getMyAccounts)
+
   @Get('lookup/:accountNumber')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Tra cứu tên chủ tài khoản theo số tài khoản' })

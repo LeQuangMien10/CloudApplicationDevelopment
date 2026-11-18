@@ -36,7 +36,12 @@ describe('Vai trò operator, auditor (F1, e2e)', () => {
       .get('/api/auth/me')
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
-    expect(me.body).toEqual({ id: expect.any(String), role: 'operator' });
+    expect(me.body).toEqual({
+      id: expect.any(String),
+      email: 'operator@bank.local',
+      fullName: 'Nhân viên vận hành',
+      role: 'operator',
+    });
   });
 
   it('auditor đăng nhập được, /auth/me trả role auditor', async () => {
@@ -45,7 +50,12 @@ describe('Vai trò operator, auditor (F1, e2e)', () => {
       .get('/api/auth/me')
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
-    expect(me.body).toEqual({ id: expect.any(String), role: 'auditor' });
+    expect(me.body).toEqual({
+      id: expect.any(String),
+      email: 'auditor@bank.local',
+      fullName: 'Kiểm toán viên',
+      role: 'auditor',
+    });
   });
 
   it('operator và auditor không được gọi API khóa user (chỉ admin)', async () => {
