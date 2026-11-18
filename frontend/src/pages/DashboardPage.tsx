@@ -13,7 +13,6 @@ export const DashboardPage: React.FC = () => {
   const { user } = useAuthStore();
   const [account, setAccount] = useState<AccountData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -71,10 +70,10 @@ export const DashboardPage: React.FC = () => {
         </p>
       </div>
 
-      {notice && (
+      {error && (
         <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-sm">
           <AlertCircle size={20} className="flex-shrink-0 text-amber-600" />
-          <span>{notice}</span>
+          <span>{error}</span>
         </div>
       )}
 
