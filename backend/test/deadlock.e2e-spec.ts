@@ -10,6 +10,7 @@ import { IdempotencyKey } from '../src/transactions/entities/idempotency-key.ent
 import { LedgerEntry } from '../src/transactions/entities/ledger-entry.entity.js';
 import { Transaction, TransactionType } from '../src/transactions/entities/transaction.entity.js';
 import { User } from '../src/users/entities/user.entity.js';
+import { OutboxEvent } from '../src/outbox/entities/outbox-event.entity.js';
 import {
   openOwnerDataSource,
   withLedgerMaintenance,
@@ -95,6 +96,20 @@ describe('POST /api/transactions/transfer - chống deadlock', () => {
                 .from(LedgerEntry)
                 .where(
                     'transaction_id IN (SELECT id FROM transactions WHERE initiated_by IN (:...userIds) AND type = :type AND description = :description)',
+                    {
+                        userIds: [userAId, userBId],
+                        type: TransactionType.TRANSFER,
+                        description: DESCRIPTION,
+                    },
+                )
+                .execute();
+            // outbox_events không có khóa ngoại tới transactions, dọn theo payload
+            await manager
+                .createQueryBuilder()
+                .delete()
+                .from(OutboxEvent)
+                .where(
+                    "payload->>'transactionId' IN (SELECT id::text FROM transactions WHERE initiated_by IN (:...userIds) AND type = :type AND description = :description)",
                     {
                         userIds: [userAId, userBId],
                         type: TransactionType.TRANSFER,
