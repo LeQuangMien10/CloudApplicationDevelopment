@@ -23,6 +23,7 @@ erDiagram
 | `ledger_entries` | id, transaction_id, account_id, direction, amount, balance_after | Sổ cái kép, chỉ thêm dòng |
 | `idempotency_keys` | (user_id, key), request_hash, transaction_id, response_code, response_body, expires_at | Chống gửi trùng |
 | `audit_logs` | id, actor_id, actor_role, action, target_type, target_id, request_id, ip, metadata (jsonb), created_at | Nhật ký kiểm toán (F2). **Chỉ thêm dòng**, xem chi tiết bên dưới |
+| `reconciliation_reports` | id, trigger, triggered_by, status, accounts_checked, mismatched_accounts, total_balance, transactions_checked, invalid_transactions, details (jsonb), duration_ms, run_at | Kết quả đối soát (F7). App chỉ có `SELECT`, `INSERT`, xem chi tiết bên dưới |
 
 ## Quy tắc quan trọng
 
@@ -52,6 +53,21 @@ erDiagram
   - Không bao giờ ghi mật khẩu, token vào `metadata`.
   - Thêm action mới không cần migration (cột varchar), đặt trong enum `AuditAction` của `audit-log.entity.ts`.
 
+- **Đối soát (TV1, F7):**
+  - 3 kiểm tra:
+    1. Mỗi tài khoản: `balance` = tổng credit trừ tổng debit = `balance_after` của dòng sổ cái mới nhất.
+    2. Tổng số dư mọi tài khoản bằng 0.
+    3. Giao dịch `completed` có đúng 1 debit ở tài khoản nguồn và 1 credit ở tài khoản đích, cùng số tiền. Giao dịch `failed`, `processing` không có dòng sổ cái nào. `processing` quá 15 phút là giao dịch treo.
+  - Mỗi kiểm tra là một câu SQL, nên đọc trên một snapshot và không báo lệch giả khi đang có chuyển tiền. Cả lần chạy nằm trong một transaction `REPEATABLE READ`, `run_at` là thời điểm của snapshot đó. Không khóa bảng.
+  - `pg_try_advisory_xact_lock` để hai lần đối soát không chạy cùng lúc.
+  - `banking_app` chỉ có `SELECT`, `INSERT`: báo cáo là bằng chứng cho auditor, app không sửa được.
+  - `details` giữ tối đa 100 tài khoản và 100 giao dịch lệch, các cột đếm luôn là số đầy đủ.
+  - Chạy định kỳ: `node dist/reconciliation/run-reconciliation.js`, mã thoát 0 khi khớp, 2 khi lệch, 1 khi lỗi.
+- **Giao dịch treo (TV1):** `StuckTransactionsService` lấy giao dịch `processing` quá 15 phút bằng `FOR UPDATE SKIP LOCKED`, mỗi lần tối đa 100.
+  - Chưa có dòng sổ cái: chuyển `failed`, `failure_reason = 'PROCESSING_TIMEOUT'`. Idempotency-Key của giao dịch được gán response `422` để gửi lại có câu trả lời dứt khoát. Ghi audit log `transaction_timed_out`. Tất cả trong một transaction.
+  - Đã có dòng sổ cái: giữ nguyên, log cảnh báo để kiểm tra tay. Đối soát cũng báo `ledger_on_not_completed`.
+  - Chạy: `node dist/reconciliation/resolve-stuck-transactions.js`, nên chạy mỗi 5 phút. Mã thoát 0 khi xong, 2 khi còn giao dịch cần kiểm tra tay, 1 khi lỗi.
+
 ## User database
 
 | User | Dùng cho | Quyền |
@@ -75,7 +91,7 @@ Người phụ trách được chỉnh khi làm và cập nhật mục này tron
 | `transactions` | **Xong tuần 7:** dùng trạng thái `failed` kèm `failure_reason`, không cần migration. Xem quy tắc "Giao dịch failed" ở trên | TV3 | 7 |
 | Bảng `outbox_events` | id, event_type, payload (jsonb), status, attempts, available_at, created_at, processed_at | TV3 | 8 |
 | Bảng `fraud_flags` | id, transaction_id, rule_code, score, status (open, confirmed, dismissed), reviewed_by, reviewed_at, note, created_at | TV3 | 8 |
-| Bảng `reconciliation_reports` | id, run_at, status, số tài khoản lệch, chi tiết (jsonb) | TV1 | 8 |
+| Bảng `reconciliation_reports` | **Xong tuần 8:** xem mục "Đối soát" ở trên | TV1 | 8 |
 
 **Quy tắc cho migration Phase 2:**
 - Bảng mới phải `GRANT` cho `banking_app`. Bảng chỉ thêm dòng (`audit_logs`) chỉ cấp `SELECT`, `INSERT`, kèm trigger chặn sửa, xóa.
@@ -83,4 +99,4 @@ Người phụ trách được chỉnh khi làm và cập nhật mục này tron
 - Mỗi migration có `down` chạy được. Sau khi thêm migration, chạy `migration:generate --dryrun` phải báo không có thay đổi, tức là entity khớp với migration.
 
 **Còn để sau:**
-- Đối soát bằng code (F7) thay cho kiểm tra tay. Sau khi có F7, chặn thêm việc đổi trạng thái giao dịch đã `completed`.
+- Chặn việc đổi trạng thái giao dịch đã `completed`. Đối soát (F7) đã phát hiện được trường hợp này nhưng chưa chặn ở DB.
