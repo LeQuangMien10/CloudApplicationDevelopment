@@ -1,6 +1,6 @@
 # SRS: yêu cầu phần mềm
 
-Các số đánh dấu **(cần chốt)** là đề xuất, nhóm thống nhất rồi bỏ đánh dấu. Yêu cầu chức năng ở [FRS](../frs/README.md).
+Các con số là mục tiêu thiết kế, kiểm chứng theo cột "Cách kiểm chứng". Lý giải từng con số ở mục 5. Yêu cầu chức năng ở [FRS](../frs/README.md).
 
 ## 1. Yêu cầu phi chức năng
 
@@ -11,10 +11,10 @@ Các số đánh dấu **(cần chốt)** là đề xuất, nhóm thống nhất
 | **Bảo mật** | JWT, phân quyền theo vai trò, khách A không xem được dữ liệu của khách B, rate limit, HTTPS, mã hóa DB | Test phân quyền, test truy cập chéo trả 404. Rate limit, HTTPS, mã hóa: tuần 6 đến 9 |
 | **Bất biến** | Sổ cái và audit log chỉ thêm dòng | Trigger và phân quyền DB, test e2e thử sửa, xóa |
 | **Truy vết** | Mỗi request có `requestId`, xuất hiện trong response, log và audit log | Header `X-Request-Id` |
-| **Hiệu năng** | 95% lệnh chuyển tiền xong dưới 300 ms, đọc dưới 200 ms, ở mức tải 5× giờ cao điểm, tức 60 request/giây **(cần chốt)** | Load test k6 tuần 10 |
-| **Sẵn sàng** | 99,5% thời gian mỗi tháng **(cần chốt)** | Uptime check, tuần 10 |
-| **Khôi phục** | Mất tối đa 1 giờ dữ liệu, khôi phục trong 30 phút **(cần chốt)** | Diễn tập khôi phục, tuần 9 |
-| **Chi phí** | Dưới 30 USD mỗi tháng khi chạy demo **(cần chốt)** | Cảnh báo ngân sách, báo cáo chi phí tuần 12 |
+| **Hiệu năng** | 95% lệnh chuyển tiền xong dưới 300 ms, đọc dưới 200 ms, ở mức tải 5× giờ cao điểm, tức 60 request/giây | Load test k6 tuần 10 |
+| **Sẵn sàng** | 99,5% thời gian mỗi tháng | Uptime check, tuần 10 |
+| **Khôi phục** | Mất tối đa 1 giờ dữ liệu, khôi phục trong 30 phút | Diễn tập khôi phục, tuần 9 |
+| **Chi phí** | Dưới 30 USD mỗi tháng khi chạy demo | Cảnh báo ngân sách, báo cáo chi phí tuần 12 |
 
 ## 2. Tình huống lỗi đề bắt buộc
 
