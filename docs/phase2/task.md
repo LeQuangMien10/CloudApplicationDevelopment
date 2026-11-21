@@ -11,7 +11,7 @@
 | | Job quét giao dịch treo | Cần chốt | 8 | Chưa làm |
 | F5 | Outbox và worker | TV3 | 8 | Chưa làm |
 | F6 | Luật phát hiện bất thường | TV3 | 8 | Chưa làm |
-| F7 | Đối soát | TV1 | 8 | Chưa làm |
+| F7 | Đối soát | TV1 | 8 | Đang review. Chạy định kỳ bằng worker (F5) hoặc cron, chưa gắn lịch |
 | F8 | Màn hình Operator, Auditor | TV4 | 8 | Chưa làm |
 | F9 | Rate limit, khóa đăng nhập | TV2 | 9 | Chưa làm |
 | F10 | Threat model | TV2, TV5 | 9 | Chưa làm |

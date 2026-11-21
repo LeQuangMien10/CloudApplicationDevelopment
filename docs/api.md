@@ -28,8 +28,9 @@ Thiết kế dự kiến để các thành viên làm thống nhất. Người p
 | PATCH | `/api/operator/accounts/:id/status` | Operator, Admin | Khóa, mở tài khoản ngân hàng, body `{ status: "frozen" \| "active", reason }` (F3) | TV2 | 7 | **Xong** |
 | GET | `/api/operator/fraud-flags?status=&page=&limit=` | Operator, Auditor, Admin | Danh sách cảnh báo bất thường (F6) | TV3 | 8 | Chưa |
 | PATCH | `/api/operator/fraud-flags/:id` | Operator, Admin | Xử lý cảnh báo, body `{ status: "confirmed" \| "dismissed", note }` (F6) | TV3 | 8 | Chưa |
-| GET | `/api/reconciliation/reports` | Auditor, Admin | Danh sách báo cáo đối soát (F7) | TV1 | 8 | Chưa |
-| POST | `/api/reconciliation/run` | Admin | Chạy đối soát ngay (F7) | TV1 | 8 | Chưa |
+| GET | `/api/reconciliation/reports?status=&page=&limit=` | Auditor, Admin | Danh sách báo cáo đối soát (F7) | TV1 | 8 | **Xong** |
+| GET | `/api/reconciliation/reports/:id` | Auditor, Admin | Chi tiết một báo cáo đối soát (F7) | TV1 | 8 | **Xong** |
+| POST | `/api/reconciliation/run` | Admin | Chạy đối soát ngay, ghi audit log `reconciliation_run` (F7) | TV1 | 8 | **Xong** |
 
 Thay đổi ở API cũ:
 - **Xong (F4, TV3):** chuyển khoản lỗi nghiệp vụ được lưu thành giao dịch `failed` kèm `failureReason`. `GET /api/transactions` và `GET /api/transactions/:id` trả cả giao dịch này cho bên gửi. Chi tiết xem mục `POST /api/transactions/transfer` bên dưới.
@@ -78,7 +79,7 @@ await this.auditService.logStandalone({ action: AuditAction.AUTH_LOGIN_FAILED, .
 
 `requestId` và `ip` được `AuditService` tự lấy từ request context (AsyncLocalStorage do `RequestIdMiddleware` gắn), không cần truyền tham số. Thêm action mới trong enum `AuditAction` của `src/audit/entities/audit-log.entity.ts`.
 
-Danh sách action hiện có: `auth_register`, `auth_login_success`, `auth_login_failed`, `user_locked`, `user_unlocked`, `account_frozen` (F3), `account_unfrozen` (F3), `transfer_completed`, `transfer_failed` (F4). Nhật bổ sung `fraud_flag_reviewed` (F6); Châu Anh bổ sung `auth_login_locked` (F9).
+Danh sách action hiện có: `auth_register`, `auth_login_success`, `auth_login_failed`, `user_locked`, `user_unlocked`, `account_frozen` (F3), `account_unfrozen` (F3), `transfer_completed`, `transfer_failed` (F4), `reconciliation_run` (F7). Nhật bổ sung `fraud_flag_reviewed` (F6); Châu Anh bổ sung `auth_login_locked` (F9).
 
 ## Request và response
 
@@ -147,6 +148,34 @@ Mật khẩu ít nhất 8 ký tự, có cả chữ và số. Email được chuy
   } ],
   "total": 12, "page": 1, "limit": 20 }
 ```
+
+**`POST /api/reconciliation/run`** → `201` (F7). Chỉ admin. Chạy đối soát ngay và trả báo cáo vừa lưu. Kết quả lệch vẫn là `201`, xem `status`. Đang có lần đối soát khác chạy thì `409 RECONCILIATION_IN_PROGRESS`. Cách kiểm tra và các tình huống lệch xem [sequence-doi-soat.md](sequence-doi-soat.md).
+
+```json
+{
+  "id": "<uuid>",
+  "trigger": "manual",                // "scheduled" khi chạy định kỳ
+  "triggeredBy": "<uuid admin>",      // null khi chạy định kỳ
+  "status": "mismatch",               // "ok" khi cả 3 kiểm tra đạt
+  "accountsChecked": 17,
+  "mismatchedAccounts": 1,
+  "totalBalance": "1.00",             // đúng thì là "0.00"
+  "transactionsChecked": 52,
+  "invalidTransactions": 0,
+  "details": {
+    "accountMismatches": [ { "accountId": "<uuid>", "accountNumber": "100000000001",
+                             "balance": "9999001.00", "ledgerBalance": "9999000.00", "lastBalanceAfter": "9999000.00" } ],
+    "transactionMismatches": [],     // mỗi mục: transactionId, type, status, amount, entryCount, problem
+    "truncated": false                // true khi quá 100 mục, các cột đếm vẫn là số đầy đủ
+  },
+  "durationMs": 21,
+  "runAt": "2026-11-21T12:00:00.000Z" // thời điểm snapshot dữ liệu được đối soát
+}
+```
+
+`problem` của giao dịch: `ledger_missing_or_unbalanced` (completed nhưng sổ cái thiếu hoặc lệch), `ledger_on_not_completed` (failed, processing mà có sổ cái), `stuck_processing` (processing quá 15 phút).
+
+**`GET /api/reconciliation/reports?status=&page=&limit=`** → `200` (F7). Auditor và admin. `status` là `ok` hoặc `mismatch`, `limit` tối đa 100, mới nhất trước. Trả `{ items, total, page, limit }`, mỗi item cùng dạng như trên. **`GET /api/reconciliation/reports/:id`** trả một báo cáo, không có thì `404 RECONCILIATION_REPORT_NOT_FOUND`.
 
 **`GET /api/accounts/me`** → `200`. Lấy `id` ở đây để làm `fromAccountId` khi chuyển khoản.
 
@@ -241,8 +270,10 @@ Mỗi response có header `X-Request-Id`. Client có thể tự gửi header nà
 | 404 | `ACCOUNT_NOT_FOUND` | Lịch sử giao dịch của tài khoản không tồn tại hoặc không thuộc mình (TV3); operator khóa tài khoản không tồn tại (F3) |
 | 404 | `SENDER_ACCOUNT_NOT_FOUND` | Tài khoản nguồn không tồn tại hoặc không thuộc user đang đăng nhập (TV3) |
 | 404 | `TARGET_ACCOUNT_NOT_FOUND` | Không có tài khoản đích với số tài khoản đã gửi (TV3); tra cứu số không tồn tại hoặc tài khoản hệ thống (TV4) |
+| 404 | `RECONCILIATION_REPORT_NOT_FOUND` | Không có báo cáo đối soát với id đã gửi (F7) |
 | 404 | `TRANSACTION_NOT_FOUND` | Giao dịch không tồn tại, hoặc không phải giao dịch của mình (TV3) |
 | 409 | `EMAIL_ALREADY_EXISTS` | Đăng ký trùng email |
+| 409 | `RECONCILIATION_IN_PROGRESS` | Đang có một lần đối soát khác chạy (F7) |
 | 409 | `IDEMPOTENCY_CONFLICT` | Cùng Idempotency-Key nhưng khác nội dung (TV3) |
 | 422 | `CANNOT_LOCK_SELF` | Admin tự khóa chính mình |
 | 422 | `CANNOT_MODIFY_SYSTEM_ACCOUNT` | Operator/admin cố đổi trạng thái tài khoản quỹ `000000000000` (F3) |
