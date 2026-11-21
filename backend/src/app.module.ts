@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware.js';
 import { buildDataSourceOptions } from './database/typeorm.config.js';
 import { HealthController } from './health/health.controller.js';
+import { ReconciliationModule } from './reconciliation/reconciliation.module.js';
 import { TransactionsModule } from './transactions/transactions.module.js';
 import { UsersModule } from './users/users.module.js';
 
@@ -20,6 +21,7 @@ import { UsersModule } from './users/users.module.js';
     AuditModule,
     AuthModule,
     TransactionsModule,
+    ReconciliationModule,
   ],
   controllers: [HealthController],
 })
