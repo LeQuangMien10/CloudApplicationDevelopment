@@ -27,7 +27,7 @@ Mỗi thư mục phase có `spec.md` (cần làm gì), `design.md` (thiết kế
 | [overview/](overview/README.md) | Dự án là gì, ghép từ những phần nào | Đã có |
 | [docker/](docker/README.md) | Chạy hệ thống bằng Docker thế nào | Đã có, phần frontend đang làm |
 | [brd/](brd/README.md) | Vì sao làm, cho ai, phạm vi đến đâu | Đã có |
-| [srs/](srs/README.md) | Hệ thống phải đạt chỉ tiêu gì | Bản nháp, còn số cần chốt |
+| [srs/](srs/README.md) | Hệ thống phải đạt chỉ tiêu gì, đảm bảo và đo bằng cách nào | Đã có |
 | [frs/](frs/README.md) | Từng chức năng chạy thế nào, lỗi gì | Đã có |
 | [plan/](plan/README.md) | Ai làm gì, khi nào | Đã có |
 | [adr/](adr/README.md) | Vì sao chọn cách này | 001 đến 005 đã có, 006 và 007 bản nháp |
