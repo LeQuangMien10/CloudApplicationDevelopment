@@ -63,6 +63,10 @@ erDiagram
   - `banking_app` chỉ có `SELECT`, `INSERT`: báo cáo là bằng chứng cho auditor, app không sửa được.
   - `details` giữ tối đa 100 tài khoản và 100 giao dịch lệch, các cột đếm luôn là số đầy đủ.
   - Chạy định kỳ: `node dist/reconciliation/run-reconciliation.js`, mã thoát 0 khi khớp, 2 khi lệch, 1 khi lỗi.
+- **Giao dịch treo (TV1):** `StuckTransactionsService` lấy giao dịch `processing` quá 15 phút bằng `FOR UPDATE SKIP LOCKED`, mỗi lần tối đa 100.
+  - Chưa có dòng sổ cái: chuyển `failed`, `failure_reason = 'PROCESSING_TIMEOUT'`. Idempotency-Key của giao dịch được gán response `422` để gửi lại có câu trả lời dứt khoát. Ghi audit log `transaction_timed_out`. Tất cả trong một transaction.
+  - Đã có dòng sổ cái: giữ nguyên, log cảnh báo để kiểm tra tay. Đối soát cũng báo `ledger_on_not_completed`.
+  - Chạy: `node dist/reconciliation/resolve-stuck-transactions.js`, nên chạy mỗi 5 phút. Mã thoát 0 khi xong, 2 khi còn giao dịch cần kiểm tra tay, 1 khi lỗi.
 
 ## User database
 

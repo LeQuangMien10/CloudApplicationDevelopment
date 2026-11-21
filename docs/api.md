@@ -79,7 +79,7 @@ await this.auditService.logStandalone({ action: AuditAction.AUTH_LOGIN_FAILED, .
 
 `requestId` và `ip` được `AuditService` tự lấy từ request context (AsyncLocalStorage do `RequestIdMiddleware` gắn), không cần truyền tham số. Thêm action mới trong enum `AuditAction` của `src/audit/entities/audit-log.entity.ts`.
 
-Danh sách action hiện có: `auth_register`, `auth_login_success`, `auth_login_failed`, `user_locked`, `user_unlocked`, `account_frozen` (F3), `account_unfrozen` (F3), `transfer_completed`, `transfer_failed` (F4), `reconciliation_run` (F7). Nhật bổ sung `fraud_flag_reviewed` (F6); Châu Anh bổ sung `auth_login_locked` (F9).
+Danh sách action hiện có: `auth_register`, `auth_login_success`, `auth_login_failed`, `user_locked`, `user_unlocked`, `account_frozen` (F3), `account_unfrozen` (F3), `transfer_completed`, `transfer_failed` (F4), `reconciliation_run` (F7), `transaction_timed_out` (job quét giao dịch treo, `actorRole` là `system`). Nhật bổ sung `fraud_flag_reviewed` (F6); Châu Anh bổ sung `auth_login_locked` (F9).
 
 ## Request và response
 
@@ -215,6 +215,7 @@ Idempotency-Key: 6f1c2a7e-4b8d-4c55-9a51-0d6e2b7f3c11
 **Giao dịch thất bại (F4).** Lỗi `INSUFFICIENT_FUNDS`, `SENDER_ACCOUNT_NOT_ACTIVE`, `TARGET_ACCOUNT_NOT_ACTIVE` vẫn trả `422` như cũ, nhưng backend lưu thêm một giao dịch `failed`:
 - Lưu trong transaction riêng sau khi rollback, không ghi sổ cái, số dư hai bên không đổi.
 - `failureReason` là mã lỗi, `completedAt` là `null`. Ghi audit log `transfer_failed`; chuyển thành công ghi `transfer_completed`.
+- `failureReason` là `PROCESSING_TIMEOUT` khi job quét giao dịch treo hủy giao dịch kẹt ở `processing` quá 15 phút mà chưa có sổ cái, tức chưa trừ tiền. Gửi lại cùng `Idempotency-Key` nhận `422 PROCESSING_TIMEOUT`.
 - `Idempotency-Key` được lưu cùng response `422`. Gửi lại cùng key và cùng body thì nhận lại đúng lỗi đó, không sinh thêm giao dịch `failed`. Muốn thử lại (ví dụ sau khi nạp thêm tiền) thì dùng key mới.
 - Không lưu khi lỗi validate (`400`), thiếu key, sai chủ tài khoản nguồn hoặc đích không tồn tại (`404`), `SAME_ACCOUNT`, `IDEMPOTENCY_CONFLICT` hoặc lỗi hệ thống (`500`).
 - Lưu giao dịch `failed` bị lỗi thì chỉ ghi log server, client vẫn nhận lỗi `422` gốc.
