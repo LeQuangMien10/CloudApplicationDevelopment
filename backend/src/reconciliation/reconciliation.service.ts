@@ -19,12 +19,11 @@ import {
   type ReconciliationCheckResult,
   summarizeReconciliation,
 } from './reconciliation.summary.js';
+import { STUCK_PROCESSING_MINUTES } from './stuck-transactions.service.js';
 
 /** Khóa advisory để hai lần đối soát không chạy cùng lúc. Số cố định, chỉ dùng cho F7. */
 const RECONCILIATION_LOCK_KEY = 7_007_001;
 
-/** Giao dịch processing lâu hơn mức này bị coi là treo. */
-const STUCK_PROCESSING_MINUTES = 15;
 
 export interface RunReconciliationInput {
   trigger: ReconciliationTrigger;
