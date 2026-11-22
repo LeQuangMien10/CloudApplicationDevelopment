@@ -17,7 +17,6 @@ describe('OutboxService', () => {
       fromAccountId: 'acc-1',
       toAccountId: 'acc-2',
       amount: '1000.50',
-      occurredAt: '2026-11-19T00:00:00.000Z',
     };
 
     await service.enqueue(
@@ -45,7 +44,6 @@ describe('OutboxService', () => {
           fromAccountId: 'acc-1',
           toAccountId: 'acc-2',
           amount: '1.00',
-          occurredAt: '2026-11-19T00:00:00.000Z',
         },
       ),
     ).rejects.toThrow('db down');

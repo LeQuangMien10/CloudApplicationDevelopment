@@ -726,13 +726,13 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
         attempts: 0,
         lastError: null,
         processedAt: null,
-        payload: {
-          transactionId: transaction.id,
-          fromAccountId: sender.id,
-          toAccountId: recipient.id,
-          amount,
-          occurredAt: transaction.createdAt.toISOString(),
-        },
+      });
+      // toEqual: payload không có trường thừa như mốc thời gian
+      expect(events[0].payload).toEqual({
+        transactionId: transaction.id,
+        fromAccountId: sender.id,
+        toAccountId: recipient.id,
+        amount,
       });
     });
 

@@ -54,7 +54,8 @@ erDiagram
   - Thêm action mới không cần migration (cột varchar), đặt trong enum `AuditAction` của `audit-log.entity.ts`.
 - **Outbox (TV3, F5, ADR 007):**
   - Chuyển khoản thành công ghi sự kiện `TRANSFER_COMPLETED` bằng `OutboxService.enqueue(manager, ...)` **trong cùng DB transaction**: rollback thì không có sự kiện, commit thì sự kiện không mất. Giao dịch `failed` và gửi lại cùng `Idempotency-Key` không ghi sự kiện.
-  - Payload `TRANSFER_COMPLETED`: `transactionId`, `fromAccountId`, `toAccountId`, `amount` (chuỗi đã chuẩn hóa về dạng `numeric(18,2)`, ví dụ `"1000.50"`, kể cả khi client gửi `"0001000.5"`), `occurredAt` (`created_at` của giao dịch, ISO 8601). Worker đọc thêm từ `transactions`, `ledger_entries` khi cần.
+  - Payload `TRANSFER_COMPLETED`: `transactionId`, `fromAccountId`, `toAccountId`, `amount` (chuỗi đã chuẩn hóa về dạng `numeric(18,2)`, ví dụ `"1000.50"`, kể cả khi client gửi `"0001000.5"`). Worker đọc thêm từ `transactions`, `ledger_entries` khi cần.
+  - **Payload không có mốc thời gian.** Worker và luật bất thường (F6) lấy `transactions.created_at` theo `transactionId` và so sánh ngay trong SQL, không đưa qua `Date` của JS: `created_at` lưu micro giây, `Date` chỉ giữ mili giây, nên khoảng `(t - 10 phút, t]` tính bằng mốc đã cắt sẽ bỏ sót chính giao dịch đó.
   - `payload` không có khóa ngoại tới `transactions` để bảng dùng chung cho nhiều loại sự kiện. Dọn dữ liệu test phải xóa sự kiện theo `payload->>'transactionId'`.
   - `banking_app` có `SELECT`, `INSERT`, `UPDATE` (worker cập nhật trạng thái), chưa có `DELETE`. Dọn sự kiện đã xử lý làm sau.
   - Partial index `idx_outbox_events_pending (available_at) WHERE status = 'pending'` cho câu poll của worker. `last_error` lưu lỗi gần nhất của handler.

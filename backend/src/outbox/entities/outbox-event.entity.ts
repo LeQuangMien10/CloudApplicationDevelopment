@@ -18,15 +18,17 @@ export enum OutboxEventStatus {
   FAILED = 'failed',
 }
 
-/** Payload của TRANSFER_COMPLETED. Worker đọc thêm dữ liệu từ transactions, ledger_entries. */
+/**
+ * Payload của TRANSFER_COMPLETED. Worker đọc thêm dữ liệu từ transactions, ledger_entries.
+ * Không có mốc thời gian: Date trong JS chỉ giữ mili giây, created_at lưu micro giây.
+ * Luật bất thường lấy transactions.created_at và so sánh ngay trong SQL.
+ */
 export interface TransferCompletedPayload {
   transactionId: string;
   fromAccountId: string;
   toAccountId: string;
   /** Chuỗi numeric(18,2) đã chuẩn hóa, ví dụ "1000.50". Không đổi sang number. */
   amount: string;
-  /** created_at của giao dịch, ISO 8601. Luật bất thường lấy mốc thời gian từ đây. */
-  occurredAt: string;
 }
 
 /** Payload tương ứng từng loại sự kiện. */

@@ -431,7 +431,6 @@ export class TransactionsService {
           toAccountId: toAccount.id,
           // transaction.amount là chuỗi client gửi, save() không đọc lại từ DB
           amount: normalizeAmount(transaction.amount),
-          occurredAt: transaction.createdAt.toISOString(),
         },
       );
 
