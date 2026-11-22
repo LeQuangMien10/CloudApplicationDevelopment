@@ -24,12 +24,12 @@ Mỗi rủi ro trình bày theo khung: **Mô tả → Tác nhân/tấn công →
 - Mỗi lần bị khóa ghi audit log `auth_login_locked` — có bằng chứng điều tra sau sự cố.
 
 **Bằng chứng:** (nhánh `feat/rate-limit-login-lockout`, F9)
-- `backend/test/login-ip-rate-limit.e2e-spec.ts` — "lần thứ 6 trong một phút từ cùng IP → 429 RATE_LIMITED kèm details.retryAfter"
+- `backend/test/login-ip-rate-limit.e2e-spec.ts` — "lần thứ 6 trong một phút từ cùng IP → 429 RATE_LIMITED kèm details.retryAfter"; "client đến từ X-Forwarded-For khác nhau không bị trừ vào chung một bucket" (trust proxy 1 hop trong `backend/src/app.setup.ts` để `req.ip` là IP client thật khi đứng sau Caddy)
 - `backend/test/login-lockout.e2e-spec.ts` — 4 test: khóa sau 5 lần sai dù đúng mật khẩu vẫn 423; dòng cũ ngoài cửa sổ 15 phút không bị đếm; thành công giữa chừng reset bộ đếm; khi đã khóa, đúng lẫn sai mật khẩu đều 423 (không tiết lộ mật khẩu đúng)
 - `backend/test/audit.e2e-spec.ts` — "audit log không chứa mật khẩu dù đăng nhập sai nhiều lần"
 - Mức bcrypt: `backend/src/auth/auth.service.ts:19` (`BCRYPT_COST = 12`)
 
-**Khoảng trống còn lại:** Chưa có WAF/challenge (CAPTCHA) cho lưu lượng phân tán nhiều IP; storage của throttler in-memory, restart container là mất bộ đếm (chấp nhận với 1 instance — quyết định trong kế hoạch F9). Sau tuần 8-9, cân nhắc: storage shared (Redis) nếu scale nhiều instance.
+**Khoảng trống còn lại:** Chưa có WAF/challenge (CAPTCHA) cho lưu lượng phân tán nhiều IP; storage của throttler in-memory, restart container là mất bộ đếm (chấp nhận với 1 instance — quyết định trong kế hoạch F9). Kiểm tra khóa theo email không khóa transaction: hai request sai đăng nhập đồng thời đều đọc được cùng một `count` trước khi dòng mới được ghi (TOCTOU) — bunga ấm rộng bị giới hạn bởi rate limit theo IP (5/phút, block 60s), chấp nhận. Bảng `login_attempts` không có job dọn (truy vấn luôn giới hạn cửa sổ 15 phút) — tăng trưởng vô hạn, cân nhắc partition/retention khi chạy thật. Sau tuần 8-9, cân nhắc: storage shared (Redis) nếu scale nhiều instance.
 
 ---
 
@@ -133,7 +133,7 @@ Mỗi bước đều có audit log hiện ra để chứng minh truy vết. Chu�
 | # | Hành động trên sân khấu | Điều khán giả thấy |
 |---|---|---|
 | 1 | Brute force: đăng nhập sai mật khẩu của một email 6 lần liên tiếp | 5 lần đầu `401 INVALID_CREDENTIALS`, lần 6 `429 RATE_LIMITED` kèm `retryAfter` (rate limit theo IP) |
-| 2 | Đặt lại mật khẩu đúng, đăng nhập vào email vừa sai đủ 5 lần | `423 LOGIN_TEMPORARILY_LOCKED` dù mật khẩu ĐÚNG — khóa theo email vẫn giữ (F9) |
+| 2 | **Chờ ~60 giây hết block IP**, rồi đặt lại mật khẩu đúng, đăng nhập vào email vừa sai đủ 5 lần | `423 LOGIN_TEMPORARILY_LOCKED` dù mật khẩu ĐÚNG — khóa theo email vẫn giữ (F9). Chú ý: làm ngay sau bước 1 (chưa hết 60s) sẽ thấy `429` trước vì chặn theo IP thắng — đây không phải lỗi, giải thích cho khán giả hoặc tăng `RATE_LIMIT_LOGIN_PER_MIN` như các test e2e |
 | 3 | psql: `SELECT action, metadata FROM audit_logs ORDER BY created_at DESC LIMIT 10;` | Chuỗi `auth_login_failed` × 5 → `auth_login_locked` → (khi hết khóa) `auth_login_success` — truy vết đầy đủ |
 | 4 | Admin khóa user qua Swagger; user đó gọi `GET /api/auth/me` bằng token cũ | Token bị từ chối ngay `401 USER_LOCKED`; audit log có `user_locked` kèm actor là admin (rủi ro #2) |
 | 5 | Operator khóa tài khoản ngân hàng kèm `reason`; user đó xem số dư rồi chuyển tiền | Vẫn đăng nhập và xem số dư được, nhưng chuyển đi/nhận vào đều `422 ...NOT_ACTIVE`; audit log có `account_frozen` kèm reason (F3) |
@@ -144,7 +144,7 @@ Sau demo, chụp ảnh từng bước đưa vào slide báo cáo; tài liệu n�
 
 ## Việc tiếp theo (rà soát lại sau tuần 9)
 
-- Cấu hình `trust proxy` cho Express khi deploy sau Caddy để `req.ip` là IP thật của client — nếu không, rate limit theo IP đếm nhầm một bucket duy nhất (liên hệ rủi ro #1).
+- ~~Cấu hình `trust proxy` cho Express sau Caddy~~ — **đã làm trong F9**: `app.setup.ts` bật `trust proxy = 1`, có test `X-Forwarded-For` chứng minh hai client khác nhau không dùng chung bucket.
 - Thêm test matrix "mọi endpoint × mọi vai trò" sinh từ Swagger (rủi ro #3).
 - Log việc bật `app.ledger_maintenance` / `app.audit_maintenance` ở môi trường thật (rủi ro #4).
 - Backup tự động + diễn tập khôi phục (Hiếu — hạ tầng).
