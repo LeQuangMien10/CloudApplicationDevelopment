@@ -114,6 +114,7 @@ Rate limit và khóa đăng nhập (F9):
   `{"code":"RATE_LIMITED","message":"Quá nhiều yêu cầu, thử lại sau","requestId":"...","details":{"retryAfter":57}}`
 - Sai mật khẩu đủ 5 lần trong 15 phút → các lần thử sau (kể cả đúng mật khẩu) trả `423 LOGIN_TEMPORARILY_LOCKED` cho đến khi lần sai cũ nhất rời khỏi cửa sổ:
   `{"code":"LOGIN_TEMPORARILY_LOCKED","message":"Đăng nhập tạm khóa do sai mật khẩu nhiều lần, thử lại sau","requestId":"...","details":{"retryAfter":842}}`
+- Khi cả hai cùng chạm ngưỡng, **429 theo IP thắng** trong suốt thời gian IP còn bị chặn (mặc định ~60 giây kể từ request thứ 6): request không chạm đến phần kiểm tra khóa theo email. Muốn quan sát `423`, chờ hết block, đổi IP, hoặc tăng `RATE_LIMIT_LOGIN_PER_MIN` (cách các test e2e của F9 dùng).
 - Mỗi lần thử đăng nhập được ghi vào bảng `login_attempts`; thành công giữa chừng đưa bộ đếm về 0 mà không cần xóa dòng cũ. Mọi lần bị khóa ghi audit log `auth_login_locked`. Mọi lần sai/thành công ghi `auth_login_failed`/`auth_login_success` như cũ.
 
 **`GET /api/auth/me`** → `200`

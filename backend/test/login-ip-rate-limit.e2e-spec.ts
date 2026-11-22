@@ -48,4 +48,28 @@ describe('Rate limit đăng nhập theo IP (F9, e2e)', () => {
     expect(limited.body.details.retryAfter).toBeGreaterThan(0);
     expect(limited.body.details.retryAfter).toBeLessThanOrEqual(60);
   });
+
+  it('client đến từ X-Forwarded-For khác nhau (sau reverse proxy) không bị trừ vào chung một bucket', async () => {
+    // 5 lần sai từ "IP A" (header X-Forwarded-For) đầy bộ đếm của riêng IP đó;
+    // request từ "IP B" phải vẫn 401 bình thường, không kế thừa block của A.
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', '203.0.113.9')
+        .send({
+          email: `f9-xff-a-${Date.now()}-${i}@example.com`,
+          password: 'SaiMatKhau@1',
+        });
+      expect(res.status).toBe(401);
+    }
+
+    const otherClient = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', '198.51.100.7')
+      .send({
+        email: `f9-xff-b-${Date.now()}@example.com`,
+        password: 'SaiMatKhau@1',
+      });
+    expect(otherClient.status).toBe(401);
+  });
 });

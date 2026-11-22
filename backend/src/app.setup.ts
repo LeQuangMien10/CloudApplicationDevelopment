@@ -8,6 +8,11 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
 
 /** Cấu hình dùng chung cho main.ts và e2e test. */
 export function setupApp(app: INestApplication) {
+  // Deploy theo ADR 006: chỉ Caddy mở cổng ra ngoài, Express đứng sau đúng 1 lớp
+  // proxy. Bật trust proxy để req.ip là IP client thật — rate limit đăng nhập
+  // (F9) đếm theo IP và audit_logs.ip ghi ip khách, không phải IP của Caddy.
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set('trust proxy', 1);
   app.setGlobalPrefix('api');
   app.enableCors({
     origin: process.env.CORS_ORIGIN?.split(',') ?? 'http://localhost:5173',

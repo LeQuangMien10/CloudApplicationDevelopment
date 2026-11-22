@@ -105,8 +105,8 @@ Tài khoản mẫu: `an@example.com`, `binh@example.com`, `chi@example.com` (m�
 | # | Thao tác | Kết quả mong đợi | Đạt | Ghi chú |
 |---|---|---|---|---|
 | 5e.1 | Đăng nhập sai mật khẩu 6 lần liên tiếp (cùng IP) | 5 lần đầu `401 INVALID_CREDENTIALS`, lần 6 `429 RATE_LIMITED` kèm `details.retryAfter` | [ ] | |
-| 5e.2 | Chờ `retryAfter` giây rồi đăng nhập sai tiếp | Về lại `401` (không còn bị 429) | [ ] | |
-| 5e.3 | Sai mật khẩu một email 5 lần trong 15 phút, rồi đăng nhập ĐÚNG mật khẩu | `423 LOGIN_TEMPORARILY_LOCKED` kèm `details.retryAfter` ≤ 900 | [ ] | |
+| 5e.2 | Chờ `retryAfter` giây rồi đăng nhập sai tiếp bằng **email mới** | Về lại `401` (không còn bị 429; email cũ của 5e.1 vẫn `423` vì đã đủ 5 lần sai) | [ ] | |
+| 5e.3 | Sai mật khẩu một email 5 lần trong 15 phút, rồi đăng nhập ĐÚNG mật khẩu | `423 LOGIN_TEMPORARILY_LOCKED` kèm `details.retryAfter` ≤ 900. Lưu ý: làm ngay sau 5e.1 thì thấy `429` trước (IP còn bị chặn ~60s) — chờ hết block hoặc tăng `RATE_LIMIT_LOGIN_PER_MIN` để thấy `423` | [ ] | |
 | 5e.4 | Auditor `GET /api/audit-logs?action=auth_login_locked` | Có dòng `auth_login_locked` cho email bị khóa | [ ] | |
 | 5e.5 | Chuyển khoản 31 lần trong một phút bằng cùng một user | 30 lần đầu `201`, lần 31 `429 RATE_LIMITED` | [ ] | |
 | 5e.6 | Trong khi 5e.5, user khác chuyển khoản bình thường | Vẫn `201` (đếm theo user, không vạ lây) | [ ] | |
