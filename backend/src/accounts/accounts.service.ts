@@ -188,4 +188,55 @@ export class AccountsService {
       status: account.status,
     };
   }
+
+  /**
+   * Issue #11: tra cứu tài khoản theo số tài khoản cho Operator/Auditor/Admin,
+   * dùng ở màn hình Operator để lấy id gọi API khóa/mở. Khác endpoint tra cứu
+   * của khách hàng: staff thấy cả id, tài khoản quỹ (cờ isSystem) và số dư
+   * (trừ auditor — ma trận phân quyền không giao auditor xem số dư).
+   */
+  async findByAccountNumberForStaff(accountNumber: string, role: string) {
+    const account = await this.accountsRepository.findOne({
+      select: {
+        id: true,
+        accountNumber: true,
+        balance: true,
+        currency: true,
+        status: true,
+        isSystem: true,
+        user: { id: true, fullName: true },
+      },
+      where: { accountNumber },
+      relations: { user: true },
+    });
+
+    if (!account) {
+      throw new AppException(
+        'ACCOUNT_NOT_FOUND',
+        'Không tìm thấy tài khoản',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const response: {
+      id: string;
+      accountNumber: string;
+      fullName: string | null;
+      status: AccountStatus;
+      isSystem: boolean;
+      balance?: string;
+      currency?: string;
+    } = {
+      id: account.id,
+      accountNumber: account.accountNumber,
+      fullName: account.user?.fullName ?? null,
+      status: account.status,
+      isSystem: account.isSystem,
+    };
+    if (role !== 'auditor') {
+      response.balance = account.balance;
+      response.currency = account.currency;
+    }
+    return response;
+  }
 }
