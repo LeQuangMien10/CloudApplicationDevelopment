@@ -736,6 +736,23 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
       });
     });
 
+    it.each([
+      ['1000', '1000.00'],
+      ['0001000.5', '1000.50'],
+    ])(
+      '19b. amount %s trong payload được chuẩn hóa thành %s, khớp với DB',
+      async (input, expected) => {
+        const response = await send(key(), transferBody(input)).expect(201);
+        const transaction = await dataSource
+          .getRepository(Transaction)
+          .findOneByOrFail({ id: response.body.transaction.id });
+
+        const [event] = await eventsOf(transaction.id);
+        expect(transaction.amount).toBe(expected);
+        expect(event.payload.amount).toBe(expected);
+      },
+    );
+
     it('20. gửi lại cùng Idempotency-Key không ghi thêm sự kiện', async () => {
       const idempotencyKey = key();
       const before = await eventCountFromSender();

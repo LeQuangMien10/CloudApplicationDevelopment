@@ -23,7 +23,7 @@ export interface TransferCompletedPayload {
   transactionId: string;
   fromAccountId: string;
   toAccountId: string;
-  /** Chuỗi numeric(18,2), không đổi sang number. */
+  /** Chuỗi numeric(18,2) đã chuẩn hóa, ví dụ "1000.50". Không đổi sang number. */
   amount: string;
   /** created_at của giao dịch, ISO 8601. Luật bất thường lấy mốc thời gian từ đây. */
   occurredAt: string;

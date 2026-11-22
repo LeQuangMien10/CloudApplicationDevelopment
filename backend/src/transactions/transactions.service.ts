@@ -18,6 +18,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { AuditAction } from '../audit/entities/audit-log.entity.js';
 import { OutboxService } from '../outbox/outbox.service.js';
 import { OutboxEventType } from '../outbox/entities/outbox-event.entity.js';
+import { normalizeAmount } from '../common/money.js';
 import type { RequestUser } from '../auth/jwt.strategy.js';
 
 /** Lỗi nghiệp vụ được lưu thành giao dịch failed (F4). Các lỗi khác không lưu. */
@@ -428,7 +429,8 @@ export class TransactionsService {
           transactionId: transaction.id,
           fromAccountId: fromAccount.id,
           toAccountId: toAccount.id,
-          amount: transaction.amount,
+          // transaction.amount là chuỗi client gửi, save() không đọc lại từ DB
+          amount: normalizeAmount(transaction.amount),
           occurredAt: transaction.createdAt.toISOString(),
         },
       );
