@@ -9,6 +9,7 @@ import { AppException } from '../common/exceptions/app.exception.js';
 import { User, UserRole, UserStatus } from '../users/entities/user.entity.js';
 import { UsersService } from '../users/users.service.js';
 import { AuthService } from './auth.service.js';
+import { LoginAttemptsService } from './login-attempts.service.js';
 import { RegisterDto } from './dto/auth.dto.js';
 
 vi.mock('bcrypt', () => ({ hash: vi.fn(), compare: vi.fn() }));
@@ -24,6 +25,10 @@ describe('AuthService', () => {
     ),
   };
   const auditService = { log: vi.fn(), logStandalone: vi.fn() };
+  const loginAttempts = {
+    recentFailures: vi.fn(async () => ({ count: 0, oldestFailureAt: null })),
+    record: vi.fn(async () => {}),
+  };
 
   const service = new AuthService(
     dataSource as unknown as DataSource,
@@ -31,6 +36,7 @@ describe('AuthService', () => {
     usersService as unknown as UsersService,
     jwtService as unknown as JwtService,
     auditService as unknown as AuditService,
+    loginAttempts as unknown as LoginAttemptsService,
   );
 
   const dto: RegisterDto = {
@@ -209,6 +215,82 @@ describe('AuthService', () => {
           actorId: 'u1',
           action: AuditAction.AUTH_LOGIN_FAILED,
           metadata: expect.objectContaining({ reason: 'user_locked' }),
+        }),
+      );
+    });
+
+    it('đăng nhập thành công ghi login_attempts success=true', async () => {
+      usersService.findByEmailWithPassword.mockResolvedValue(makeUser());
+      vi.mocked(compare).mockResolvedValue(true as never);
+      jwtService.signAsync.mockResolvedValue('token-abc' as never);
+      jwtService.decode.mockReturnValue({ exp: 1000, iat: 100 });
+
+      await service.login({ email: 'an@example.com', password: 'Password@123' });
+
+      expect(loginAttempts.record).toHaveBeenCalledWith(
+        'an@example.com',
+        null,
+        true,
+      );
+    });
+
+    it('sai mật khẩu ghi login_attempts success=false', async () => {
+      usersService.findByEmailWithPassword.mockResolvedValue(makeUser());
+      vi.mocked(compare).mockResolvedValue(false as never);
+
+      await service
+        .login({ email: 'an@example.com', password: 'Sai@123' })
+        .catch(() => {});
+
+      expect(loginAttempts.record).toHaveBeenCalledWith(
+        'an@example.com',
+        null,
+        false,
+      );
+    });
+
+    it('đúng mật khẩu nhưng user bị khóa KHÔNG ghi login_attempts (không phải lần đoán)', async () => {
+      usersService.findByEmailWithPassword.mockResolvedValue(
+        makeUser({ status: UserStatus.LOCKED }),
+      );
+      vi.mocked(compare).mockResolvedValue(true as never);
+
+      await service
+        .login({ email: 'an@example.com', password: 'Password@123' })
+        .catch(() => {});
+
+      expect(loginAttempts.record).not.toHaveBeenCalled();
+    });
+
+    it('sai đủ 5 lần trong cửa sổ -> 423 LOGIN_TEMPORARILY_LOCKED TRƯỚC khi chạy bcrypt, kèm retryAfter và audit AUTH_LOGIN_LOCKED', async () => {
+      const oldest = new Date(Date.now() - 60_000);
+      loginAttempts.recentFailures.mockResolvedValue({
+        count: 5,
+        oldestFailureAt: oldest,
+      });
+
+      const err = await service
+        .login({ email: 'an@example.com', password: 'Password@123' })
+        .then(
+          () => null,
+          (e) => e,
+        );
+
+      expect(err).toBeInstanceOf(AppException);
+      expect(err.code).toBe('LOGIN_TEMPORARILY_LOCKED');
+      expect(err.getStatus()).toBe(423);
+      expect(err.details.retryAfter).toBeGreaterThan(0);
+      expect(err.details.retryAfter).toBeLessThanOrEqual(900);
+      // khóa chặn trước bcrypt: kẻ đoán mật khẩu không được đốt CPU của hệ thống
+      expect(usersService.findByEmailWithPassword).not.toHaveBeenCalled();
+      expect(vi.mocked(compare)).not.toHaveBeenCalled();
+      expect(auditService.logStandalone).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: AuditAction.AUTH_LOGIN_LOCKED,
+          metadata: expect.objectContaining({
+            email: 'an@example.com',
+            retryAfter: err.details.retryAfter,
+          }),
         }),
       );
     });

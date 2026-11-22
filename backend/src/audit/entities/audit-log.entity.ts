@@ -15,6 +15,7 @@ export enum AuditAction {
   AUTH_REGISTER = 'auth_register',
   AUTH_LOGIN_SUCCESS = 'auth_login_success',
   AUTH_LOGIN_FAILED = 'auth_login_failed',
+  AUTH_LOGIN_LOCKED = 'auth_login_locked',
   USER_LOCKED = 'user_locked',
   USER_UNLOCKED = 'user_unlocked',
   ACCOUNT_FROZEN = 'account_frozen',
