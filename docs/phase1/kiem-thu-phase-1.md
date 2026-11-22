@@ -100,6 +100,19 @@ Tài khoản mẫu: `an@example.com`, `binh@example.com`, `chi@example.com` (m�
 | 5c.8 | Auditor xem audit log sau khi khóa/mở | Có `account_frozen` và `account_unfrozen` kèm `reason` | [ ] | |
 | 5c.9 | Đặt `status='closed'` bằng SQL cho một tài khoản, rồi khóa và mở bằng API | Đều `422 ACCOUNT_CLOSED`, không có log mới | [ ] | |
 
+## 5e. Rate limit và khóa đăng nhập (F9 — làm bằng Swagger)
+
+| # | Thao tác | Kết quả mong đợi | Đạt | Ghi chú |
+|---|---|---|---|---|
+| 5e.1 | Đăng nhập sai mật khẩu 6 lần liên tiếp (cùng IP) | 5 lần đầu `401 INVALID_CREDENTIALS`, lần 6 `429 RATE_LIMITED` kèm `details.retryAfter` | [ ] | |
+| 5e.2 | Chờ `retryAfter` giây rồi đăng nhập sai tiếp | Về lại `401` (không còn bị 429) | [ ] | |
+| 5e.3 | Sai mật khẩu một email 5 lần trong 15 phút, rồi đăng nhập ĐÚNG mật khẩu | `423 LOGIN_TEMPORARILY_LOCKED` kèm `details.retryAfter` ≤ 900 | [ ] | |
+| 5e.4 | Auditor `GET /api/audit-logs?action=auth_login_locked` | Có dòng `auth_login_locked` cho email bị khóa | [ ] | |
+| 5e.5 | Chuyển khoản 31 lần trong một phút bằng cùng một user | 30 lần đầu `201`, lần 31 `429 RATE_LIMITED` | [ ] | |
+| 5e.6 | Trong khi 5e.5, user khác chuyển khoản bình thường | Vẫn `201` (đếm theo user, không vạ lây) | [ ] | |
+| 5e.7 | Đăng nhập đúng giữa chuỗi sai (chưa đủ 5 lần) rồi sai tiếp 4 lần nữa, đăng nhập đúng | Vẫn vào được — thành công giữa chừng đưa bộ đếm về 0 | [ ] | |
+| 5e.8 | `docker compose exec db psql -U bank -d banking -c "UPDATE login_attempts SET success = true WHERE email_norm = '...';"` bằng user `bank` | Sửa được (owner), còn bằng `bank_app` thì lỗi `permission denied` | [ ] | |
+
 ## 6. Toàn vẹn dữ liệu và kỹ thuật
 
 Chạy bằng `docker compose exec db psql -U bank -d banking -c "<câu SQL>"`.

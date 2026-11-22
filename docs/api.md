@@ -33,7 +33,7 @@ Thiết kế dự kiến để các thành viên làm thống nhất. Người p
 
 Thay đổi ở API cũ:
 - **Xong (F4, TV3):** chuyển khoản lỗi nghiệp vụ được lưu thành giao dịch `failed` kèm `failureReason`. `GET /api/transactions` và `GET /api/transactions/:id` trả cả giao dịch này cho bên gửi. Chi tiết xem mục `POST /api/transactions/transfer` bên dưới.
-- Đăng nhập và chuyển khoản có rate limit, vượt thì `429 RATE_LIMITED`. Sai mật khẩu nhiều lần thì tạm khóa đăng nhập (F9, TV2).
+- **Xong (F9, TV2):** đăng nhập giới hạn **5 lần/phút theo IP**, chuyển khoản **30 lần/phút theo user**, vượt thì `429 RATE_LIMITED` kèm `details.retryAfter` (giây). Sai mật khẩu đủ **5 lần trong 15 phút** thì tạm khóa đăng nhập: thử lại (kể cả đúng mật khẩu) trả `423 LOGIN_TEMPORARILY_LOCKED` cho đến khi lần sai cũ nhất rời khỏi cửa sổ 15 phút. Đăng nhập thành công đưa bộ đếm về 0. Chi tiết xem mục `POST /api/auth/login`.
 - Operator, Auditor xem được giao dịch của mọi tài khoản. Cách lọc chốt khi làm F1.
 
 ## Xác thực
@@ -78,7 +78,7 @@ await this.auditService.logStandalone({ action: AuditAction.AUTH_LOGIN_FAILED, .
 
 `requestId` và `ip` được `AuditService` tự lấy từ request context (AsyncLocalStorage do `RequestIdMiddleware` gắn), không cần truyền tham số. Thêm action mới trong enum `AuditAction` của `src/audit/entities/audit-log.entity.ts`.
 
-Danh sách action hiện có: `auth_register`, `auth_login_success`, `auth_login_failed`, `user_locked`, `user_unlocked`, `account_frozen` (F3), `account_unfrozen` (F3), `transfer_completed`, `transfer_failed` (F4). Nhật bổ sung `fraud_flag_reviewed` (F6); Châu Anh bổ sung `auth_login_locked` (F9).
+Danh sách action hiện có: `auth_register`, `auth_login_success`, `auth_login_failed`, `auth_login_locked` (F9), `user_locked`, `user_unlocked`, `account_frozen` (F3), `account_unfrozen` (F3), `transfer_completed`, `transfer_failed` (F4). Nhật bổ sung `fraud_flag_reviewed` (F6).
 
 ## Request và response
 
@@ -101,6 +101,20 @@ Mật khẩu ít nhất 8 ký tự, có cả chữ và số. Email được chuy
 // response
 { "accessToken": "<jwt>", "expiresIn": 900 }
 ```
+
+Rate limit và khóa đăng nhập (F9):
+
+| Ngưỡng | Giá trị mặc định | Đếm theo | Đổi bằng env |
+|---|---|---|---|
+| Đăng nhập | 5 lần/phút | IP | `RATE_LIMIT_LOGIN_PER_MIN` |
+| Chuyển khoản | 30 lần/phút | user | `RATE_LIMIT_TRANSFER_PER_MIN` |
+| Khóa đăng nhập | sai 5 lần trong 15 phút | email | hằng số trong `login-attempts.service.ts` |
+
+- Vượt ngưỡng rate limit → `429 RATE_LIMITED`, kèm `details.retryAfter` (giây):
+  `{"code":"RATE_LIMITED","message":"Quá nhiều yêu cầu, thử lại sau","requestId":"...","details":{"retryAfter":57}}`
+- Sai mật khẩu đủ 5 lần trong 15 phút → các lần thử sau (kể cả đúng mật khẩu) trả `423 LOGIN_TEMPORARILY_LOCKED` cho đến khi lần sai cũ nhất rời khỏi cửa sổ:
+  `{"code":"LOGIN_TEMPORARILY_LOCKED","message":"Đăng nhập tạm khóa do sai mật khẩu nhiều lần, thử lại sau","requestId":"...","details":{"retryAfter":842}}`
+- Mỗi lần thử đăng nhập được ghi vào bảng `login_attempts`; thành công giữa chừng đưa bộ đếm về 0 mà không cần xóa dòng cũ. Mọi lần bị khóa ghi audit log `auth_login_locked`. Mọi lần sai/thành công ghi `auth_login_failed`/`auth_login_success` như cũ.
 
 **`GET /api/auth/me`** → `200`
 
@@ -250,6 +264,7 @@ Mỗi response có header `X-Request-Id`. Client có thể tự gửi header nà
 | 422 | `SENDER_ACCOUNT_NOT_ACTIVE`, `TARGET_ACCOUNT_NOT_ACTIVE` | Tài khoản nguồn hoặc đích không ở trạng thái active, có lưu giao dịch `failed` (TV3) |
 | 422 | `INSUFFICIENT_FUNDS` | Số dư không đủ, có lưu giao dịch `failed` (TV3) |
 | 422 | `SAME_ACCOUNT` | Chuyển cho chính tài khoản nguồn, không lưu giao dịch `failed` (TV3) |
-| 429 | `RATE_LIMITED` | Gửi quá nhiều request (Phase 2, TV2) |
+| 423 | `LOGIN_TEMPORARILY_LOCKED` | Sai mật khẩu đủ 5 lần trong 15 phút, tạm khóa đến khi lần sai cũ nhất rời cửa sổ; `details.retryAfter` (giây). Kiểm tra trước khi chạy bcrypt (F9) |
+| 429 | `RATE_LIMITED` | Vượt rate limit: đăng nhập 5 lần/phút theo IP, chuyển khoản 30 lần/phút theo user; `details.retryAfter` (giây) (F9) |
 | 500 | `INTERNAL_ERROR` | Lỗi hệ thống, tra log bằng `requestId` |
 | 503 | `DB_UNAVAILABLE` | `/api/health` không kết nối được database (TV5) |
