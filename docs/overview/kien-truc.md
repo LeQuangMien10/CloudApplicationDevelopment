@@ -107,7 +107,7 @@ Chi tiết: [sequence-chuyen-tien.md](../sequence-chuyen-tien.md).
    - Key đã có, khác nội dung: `409`.
 3. Khóa hai tài khoản bằng `SELECT ... FOR UPDATE` **theo thứ tự số tài khoản** (ADR 004).
 4. Kiểm tra: tài khoản nguồn thuộc user, hai bên `active`, đủ số dư.
-5. Cập nhật số dư bằng SQL (`balance = balance - :amount`), ghi giao dịch `completed`, 2 dòng sổ cái, audit log (F4, chưa merge), sự kiện `outbox_events` (F5, tuần 8), lưu response vào idempotency key.
+5. Cập nhật số dư bằng SQL (`balance = balance - :amount`), ghi giao dịch `completed`, 2 dòng sổ cái, audit log (F4), sự kiện `outbox_events` (F5), lưu response vào idempotency key.
 6. Commit. Lỗi ở bất kỳ bước nào thì rollback toàn bộ.
 
 DB kiểm tra thêm lúc commit: giao dịch `completed` phải có đúng 1 dòng debit và 1 dòng credit cân nhau, sai thì commit bị từ chối (ADR 005).
