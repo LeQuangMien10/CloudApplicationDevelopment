@@ -16,6 +16,9 @@ import { AppException } from '../common/exceptions/app.exception.js';
 import { LedgerPostingService } from './services/ledger-posting.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { AuditAction } from '../audit/entities/audit-log.entity.js';
+import { OutboxService } from '../outbox/outbox.service.js';
+import { OutboxEventType } from '../outbox/entities/outbox-event.entity.js';
+import { normalizeAmount } from '../common/money.js';
 import type { RequestUser } from '../auth/jwt.strategy.js';
 
 /** Lỗi nghiệp vụ được lưu thành giao dịch failed (F4). Các lỗi khác không lưu. */
@@ -62,6 +65,7 @@ export class TransactionsService {
     private readonly dataSource: DataSource,
     private readonly ledgerPostingService: LedgerPostingService,
     private readonly auditService: AuditService,
+    private readonly outboxService: OutboxService,
   ) {}
 
   async getTransactionById(userId: string, transactionId: string) {
@@ -416,6 +420,19 @@ export class TransactionsService {
           toAccountId: toAccount.id,
         },
       });
+
+      // Sự kiện cho worker chấm luật bất thường (F5), commit cùng giao dịch nên không mất
+      await this.outboxService.enqueue(
+        queryRunner.manager,
+        OutboxEventType.TRANSFER_COMPLETED,
+        {
+          transactionId: transaction.id,
+          fromAccountId: fromAccount.id,
+          toAccountId: toAccount.id,
+          // transaction.amount là chuỗi client gửi, save() không đọc lại từ DB
+          amount: normalizeAmount(transaction.amount),
+        },
+      );
 
       await queryRunner.commitTransaction();
 

@@ -1,6 +1,6 @@
 # Database (Phase 1)
 
-PostgreSQL 16. Schema tạo bởi các migration trong `backend/src/database/migrations/`: `InitSchema` tạo bảng, `EnforceTransferLedgerIntegrity` và `RestrictLedgerMutation` thêm trigger và phân quyền bảo vệ sổ cái, `AddOperatorAuditorRoles` thêm vai trò operator, auditor (F1 Phase 2).
+PostgreSQL 16. Schema tạo bởi các migration trong `backend/src/database/migrations/`: `InitSchema` tạo bảng, `EnforceTransferLedgerIntegrity` và `RestrictLedgerMutation` thêm trigger và phân quyền bảo vệ sổ cái, `AddOperatorAuditorRoles` thêm vai trò operator, auditor (F1 Phase 2), `CreateAuditLogs` tạo bảng audit log (F2), `CreateOutboxEvents` tạo hàng đợi sự kiện cho worker (F5).
 
 ```mermaid
 erDiagram
@@ -23,6 +23,7 @@ erDiagram
 | `ledger_entries` | id, transaction_id, account_id, direction, amount, balance_after | Sổ cái kép, chỉ thêm dòng |
 | `idempotency_keys` | (user_id, key), request_hash, transaction_id, response_code, response_body, expires_at | Chống gửi trùng |
 | `audit_logs` | id, actor_id, actor_role, action, target_type, target_id, request_id, ip, metadata (jsonb), created_at | Nhật ký kiểm toán (F2). **Chỉ thêm dòng**, xem chi tiết bên dưới |
+| `outbox_events` | id, event_type, payload (jsonb), status, attempts, available_at, last_error, created_at, processed_at | Hàng đợi sự kiện cho worker (F5). status: pending, done, failed. Xem chi tiết bên dưới |
 
 ## Quy tắc quan trọng
 
@@ -51,6 +52,14 @@ erDiagram
   - Log của thao tác có thay đổi dữ liệu (khóa/mở user, đăng ký) ghi **trong cùng DB transaction** với thao tác đó; đăng nhập thành công/thất bại không có transaction bao ngoài nên ghi độc lập.
   - Không bao giờ ghi mật khẩu, token vào `metadata`.
   - Thêm action mới không cần migration (cột varchar), đặt trong enum `AuditAction` của `audit-log.entity.ts`.
+- **Outbox (TV3, F5, ADR 007):**
+  - Chuyển khoản thành công ghi sự kiện `TRANSFER_COMPLETED` bằng `OutboxService.enqueue(manager, ...)` **trong cùng DB transaction**: rollback thì không có sự kiện, commit thì sự kiện không mất. Giao dịch `failed` và gửi lại cùng `Idempotency-Key` không ghi sự kiện.
+  - Payload `TRANSFER_COMPLETED`: `transactionId`, `fromAccountId`, `toAccountId`, `amount` (chuỗi đã chuẩn hóa về dạng `numeric(18,2)`, ví dụ `"1000.50"`, kể cả khi client gửi `"0001000.5"`). Worker đọc thêm từ `transactions`, `ledger_entries` khi cần.
+  - **Payload không có mốc thời gian.** Worker và luật bất thường (F6) lấy `transactions.created_at` theo `transactionId` và so sánh ngay trong SQL, không đưa qua `Date` của JS: `created_at` lưu micro giây, `Date` chỉ giữ mili giây, nên khoảng `(t - 10 phút, t]` tính bằng mốc đã cắt sẽ bỏ sót chính giao dịch đó.
+  - `payload` không có khóa ngoại tới `transactions` để bảng dùng chung cho nhiều loại sự kiện. Dọn dữ liệu test phải xóa sự kiện theo `payload->>'transactionId'`.
+  - `banking_app` có `SELECT`, `INSERT`, `UPDATE` (worker cập nhật trạng thái), chưa có `DELETE`. Dọn sự kiện đã xử lý làm sau.
+  - Partial index `idx_outbox_events_pending (available_at) WHERE status = 'pending'` cho câu poll của worker. `last_error` lưu lỗi gần nhất của handler.
+  - Thêm loại sự kiện mới không cần migration (cột varchar), đặt trong enum `OutboxEventType` và kiểu payload trong `OutboxPayloads` của `outbox-event.entity.ts`.
 
 ## User database
 
@@ -73,7 +82,7 @@ Người phụ trách được chỉnh khi làm và cập nhật mục này tron
 | Bảng `audit_logs` | **Xong tuần 7:** xem mục "Audit log chỉ thêm dòng" ở trên | TV2 | 7 |
 | `users` | Thêm cột đếm số lần đăng nhập sai, thời điểm hết tạm khóa | TV2 | 9 |
 | `transactions` | **Xong tuần 7:** dùng trạng thái `failed` kèm `failure_reason`, không cần migration. Xem quy tắc "Giao dịch failed" ở trên | TV3 | 7 |
-| Bảng `outbox_events` | id, event_type, payload (jsonb), status, attempts, available_at, created_at, processed_at | TV3 | 8 |
+| Bảng `outbox_events` | **Xong tuần 8 (phần ghi sự kiện):** thêm cột `last_error`, xem mục "Outbox" ở trên. Worker đọc sự kiện làm ở PR sau | TV3 | 8 |
 | Bảng `fraud_flags` | id, transaction_id, rule_code, score, status (open, confirmed, dismissed), reviewed_by, reviewed_at, note, created_at | TV3 | 8 |
 | Bảng `reconciliation_reports` | id, run_at, status, số tài khoản lệch, chi tiết (jsonb) | TV1 | 8 |
 

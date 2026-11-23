@@ -5,11 +5,11 @@
 | F1 | Vai trò Operator, Auditor | TV2 | 7 | Xong (#7) |
 | F2 | Audit log | TV2 | 7 | Xong (#8) |
 | F3 | Khóa, mở tài khoản ngân hàng | TV2 | 7 | Xong (#9) |
-| F4 | Lưu giao dịch thất bại | TV3 | 7 | Đang review |
+| F4 | Lưu giao dịch thất bại | TV3 | 7 | Xong (#12) |
 | | API tra cứu tài khoản cho Operator | TV2 | 8 | Issue #11 |
 | | Nạp tiền mô phỏng | Cần chốt | 8 | Chưa làm |
 | | Job quét giao dịch treo | Cần chốt | 8 | Chưa làm |
-| F5 | Outbox và worker | TV3 | 8 | Chưa làm |
+| F5 | Outbox và worker | TV3 | 8 | Đang làm: bảng outbox và ghi sự kiện (PR 1) đang review, worker chưa làm |
 | F6 | Luật phát hiện bất thường | TV3 | 8 | Chưa làm |
 | F7 | Đối soát | TV1 | 8 | Chưa làm |
 | F8 | Màn hình Operator, Auditor | TV4 | 8 | Chưa làm |

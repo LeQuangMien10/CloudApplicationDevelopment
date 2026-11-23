@@ -1,5 +1,6 @@
 import { Account } from '../accounts/entities/account.entity.js';
 import { AuditLog } from '../audit/entities/audit-log.entity.js';
+import { OutboxEvent } from '../outbox/entities/outbox-event.entity.js';
 import { IdempotencyKey } from '../transactions/entities/idempotency-key.entity.js';
 import { LedgerEntry } from '../transactions/entities/ledger-entry.entity.js';
 import { Transaction } from '../transactions/entities/transaction.entity.js';
@@ -13,4 +14,5 @@ export const ENTITIES = [
   LedgerEntry,
   IdempotencyKey,
   AuditLog,
+  OutboxEvent,
 ];
