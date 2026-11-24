@@ -71,8 +71,8 @@ Khung nét đứt là thành phần dự kiến.
 | ② | Reverse proxy | Điểm vào duy nhất từ Internet. Kết thúc HTTPS, chuyển HTTP sang HTTPS, chuyển `/api` vào ứng dụng | Có |
 | ③ | Web client | Giao diện cho 4 vai trò. Gọi API cùng tên miền nên không cần CORS | Có. Màn hình Operator, Auditor: tuần 8 |
 | ④ | Ứng dụng API | Toàn bộ nghiệp vụ, chia module theo capability. Không giữ trạng thái giữa các request | Có |
-| ⑤ | Database giao dịch | Nguồn dữ liệu duy nhất, đảm bảo ACID. Kiêm hàng đợi sự kiện (bảng outbox), không dùng message broker riêng | Có. Bảng outbox: Review (#14) |
-| ⑥ | Worker | Process riêng, cùng codebase với API. Lấy sự kiện từ outbox, chạy việc định kỳ | Dự kiến tuần 8. Đối soát, quét giao dịch treo: Review (#15) |
+| ⑤ | Database giao dịch | Nguồn dữ liệu duy nhất, đảm bảo ACID. Kiêm hàng đợi sự kiện (bảng outbox), không dùng message broker riêng | Có |
+| ⑥ | Worker | Process riêng, cùng codebase với API. Lấy sự kiện từ outbox, chạy việc định kỳ | Dự kiến tuần 8. Đối soát và quét giao dịch treo đã có, tạm chạy bằng script cho tới khi có worker |
 | ⑦ | Dịch vụ chấm điểm rủi ro | Chấm điểm giao dịch bằng mô hình học máy, chỉ để gắn cờ | Dự kiến tuần 11 |
 | ⑧ | Dịch vụ email | Gửi cảnh báo giao dịch bị gắn cờ tới Operator, Auditor, Admin | Dự kiến, chờ phân công |
 | ⑨ | Kho backup | Lưu bản sao database ở ngoài máy chủ | Dự kiến tuần 9 |
@@ -90,8 +90,8 @@ Vì sao không tách microservice: chuyển tiền phải trừ, cộng và ghi 
 | `accounts` | Số dư, tạo tài khoản khi đăng ký, tra cứu người nhận, khóa và mở tài khoản | `accounts` | TV3, F3 do TV2 | Có |
 | `transactions` | Chuyển tiền, Idempotency-Key, sổ cái kép, lịch sử, giao dịch `failed` | `transactions`, `ledger_entries`, `idempotency_keys` | TV3 | Có |
 | `audit` | Ghi và tra cứu audit log. Module khác gọi `AuditService` | `audit_logs` | TV2 | Có |
-| `outbox` | Ghi sự kiện trong transaction của nghiệp vụ | `outbox_events` | TV3 | Review (#14) |
-| `reconciliation` | Đối soát số dư với sổ cái, quét giao dịch treo | `reconciliation_reports` | TV1 | Review (#15) |
+| `outbox` | Ghi sự kiện trong transaction của nghiệp vụ | `outbox_events` | TV3 | Có |
+| `reconciliation` | Đối soát số dư với sổ cái, quét giao dịch treo | `reconciliation_reports` | TV1 | Có |
 | worker | Process nền: lấy sự kiện, chạy luật bất thường, gọi việc định kỳ | `outbox_events` | TV3 | Dự kiến tuần 8 |
 | `fraud` | Luật bất thường, API để Operator xử lý cảnh báo | `fraud_flags` | TV3 | Dự kiến tuần 8 |
 | `health` | Kiểm tra ứng dụng và kết nối database | | TV5 | Có |
@@ -131,7 +131,7 @@ Vì sao không tách microservice: chuyển tiền phải trừ, cộng và ghi 
 | Khóa, mở tài khoản ngân hàng | Operator | UC1 | Phân quyền | Có |
 | Khóa, mở user | Admin | UC1 | Phân quyền | Có |
 | Tra cứu audit log | Auditor, Admin | UC6 | Truy vết | Có |
-| Đối soát, báo cáo đối soát | Auditor, Admin | | Tiền không sai | Review (#15) |
+| Đối soát, báo cáo đối soát | Auditor, Admin | | Tiền không sai | Có |
 | Phát hiện giao dịch đáng ngờ, Operator xử lý cảnh báo | Operator | UC7 | Truy vết | Dự kiến tuần 8 |
 | Chấm điểm rủi ro bằng học máy | Hệ thống | UC7 | | Dự kiến tuần 11 |
 | Rate limit, khóa đăng nhập sai nhiều lần | Hệ thống | | Phân quyền | Dự kiến tuần 9 |
@@ -205,10 +205,14 @@ flowchart LR
     P4 -- "đổi trạng thái" --> D2
     P4 -- "đọc, ghi" --> D7
     P4 -- "đọc, ghi" --> D5
-    D6 -- "sự kiện chờ xử lý" --> P5
-    P5 -- "đọc" --> D3
+    D6 -- "sự kiện pending" --> P5
+    P5 -- "đánh dấu done, failed" --> D6
+    P5 -- "đọc lịch sử giao dịch, sổ cái" --> D3
+    P5 -- "đọc số dư để đối soát" --> D2
     P5 -- "cảnh báo, báo cáo" --> D7
 ```
+
+Sự kiện chỉ mang `transactionId`, hai tài khoản (`fromAccountId`, `toAccountId`) và số tiền (`amount`). P5 đọc thêm D3 để chấm luật bất thường (lấy `created_at`, lịch sử giao dịch, `balance_after`) và để đối soát; đọc D2 khi đối soát số dư.
 
 P2 ghi vào D2, D3, D4, D5, D6 trong **một DB transaction**: hoặc tất cả cùng có, hoặc không có gì. Các bước chi tiết ở [sequence-chuyen-tien.md](../sequence-chuyen-tien.md):
 
@@ -249,7 +253,7 @@ flowchart LR
     WEB -- "REST, JSON, HTTPS<br/>đồng bộ" --> RP
     RP --> API
     API -- "SQL, transaction" --> DB
-    WK -- "đọc outbox định kỳ<br/>bất đồng bộ" --> DB
+    WK -- "SQL: lấy outbox SKIP LOCKED,<br/>đọc giao dịch, sổ cái, số dư,<br/>ghi cảnh báo, báo cáo" --> DB
     WK -.->|"HTTP, JSON<br/>có timeout"| SC
     WK -.->|"SMTP, TLS<br/>thử lại có backoff"| EM
     RP -- "ACME, tự gia hạn" --> CA
@@ -260,14 +264,14 @@ flowchart LR
 | Hệ thống | Kiểu tích hợp | Giao thức | Đồng bộ | Bảo mật | Giám sát | Khi lỗi | Tình trạng |
 |---|---|---|---|---|---|---|---|
 | Web client | API | REST, JSON, HTTPS | Đồng bộ | Token Bearer, HTTPS | Health check, log có `requestId` | Trả lỗi theo định dạng chung, client hiển thị | Có |
-| Worker với database | Hàng đợi trong database (outbox) | SQL, `FOR UPDATE SKIP LOCKED` | Bất đồng bộ | User DB riêng, quyền tối thiểu | Số sự kiện `pending`, `failed` | Thử lại có backoff, quá số lần thì `failed` | Review (#14), worker tuần 8 |
+| Worker với database | Hàng đợi trong database (outbox) | SQL. Poll sự kiện `pending` có `available_at <= now()`, lấy bằng `FOR UPDATE SKIP LOCKED` | Bất đồng bộ | Dùng user của ứng dụng (`bank_app`, role `banking_app`): không sửa, xóa được sổ cái, audit log, báo cáo đối soát; không có `DELETE` trên outbox | Số sự kiện `pending`, `failed`, và tuổi của sự kiện `pending` lâu nhất để biết worker chậm hay đã chết | Thử lại có backoff, quá số lần thì `failed`. Worker chết giữa chừng thì khóa được nhả, sự kiện vẫn `pending`. Xử lý lại không tạo cảnh báo trùng | Bảng outbox: Có. Worker: tuần 8 |
 | Dịch vụ chấm điểm | API nội bộ | HTTP, JSON trong mạng nội bộ | Worker gọi đồng bộ, có timeout | Không mở ra Internet | Tỷ lệ lỗi, latency | Chỉ dùng luật cố định, không chặn chuyển tiền | Dự kiến tuần 11 |
 | Nhà cung cấp email | Gửi thư | SMTP, TLS | Bất đồng bộ | Thông tin đăng nhập SMTP để ngoài repo | Số thư gửi lỗi | Cảnh báo vẫn trong database, thử lại sau | Dự kiến |
 | Nhà cấp chứng chỉ | Cấp, gia hạn chứng chỉ | ACME | Bất đồng bộ, tự động | | Log của reverse proxy | Chứng chỉ cũ còn hạn 90 ngày, đủ thời gian xử lý | Có |
 | Nhà cung cấp DNS | Phân giải tên miền | DNS | | | Uptime check từ bên ngoài | IP tĩnh nên bản ghi không đổi | Có |
-| Hệ thống CI/CD | Deploy | SSH, API của cloud | Chạy khi merge `main` | Cổng SSH chỉ mở tạm cho máy chạy CI, quyền cloud tối thiểu | Kết quả workflow | Deploy tay bằng một lệnh | Đang làm |
+| Hệ thống CI/CD | Deploy | SSH, API của cloud | Chạy khi merge `main` | Cổng SSH chỉ mở tạm cho máy chạy CI, quyền cloud tối thiểu | Kết quả workflow | Deploy tay bằng một lệnh | Review (#20) |
 
-**Đồng bộ dữ liệu giữa các thành phần:** chỉ có một database, nên không phải đồng bộ dữ liệu giữa nhiều nơi. Worker và dịch vụ chấm điểm chỉ đọc dữ liệu đã commit và ghi kết quả của riêng mình.
+**Đồng bộ dữ liệu giữa các thành phần:** chỉ có một database, nên không phải đồng bộ dữ liệu giữa nhiều nơi. Worker chỉ đọc dữ liệu đã commit. Ngoài kết quả của riêng mình (`fraud_flags`, `reconciliation_reports`, trạng thái outbox), chỉ job quét giao dịch treo được sửa `transactions`, và chỉ với giao dịch chưa có sổ cái. Dịch vụ chấm điểm không truy cập database.
 
 ### Việc nào đồng bộ, việc nào bất đồng bộ
 
@@ -275,12 +279,13 @@ flowchart LR
 |---|---|---|
 | Đăng nhập, xem số dư, lịch sử | Đồng bộ | Người dùng cần kết quả ngay |
 | Chuyển tiền: khóa, trừ, cộng, sổ cái, idempotency, audit, sự kiện | Đồng bộ, **một DB transaction** | Phải nhất quán mạnh |
-| Lưu giao dịch `failed` | Đồng bộ, transaction riêng sau rollback | Giữ lại lý do lỗi mà không ảnh hưởng rollback |
-| Phát hiện bất thường | Bất đồng bộ qua outbox. Xử lý lại không tạo cảnh báo trùng | Không làm chậm chuyển tiền, không mất sự kiện khi crash ([ADR 007](../adr/007-outbox-postgresql.md)) |
-| Chấm điểm rủi ro | Bất đồng bộ, worker gọi | Chỉ gắn cờ, không chặn chuyển tiền |
-| Đối soát | Bất đồng bộ, mỗi ngày | Việc nặng, không cần ngay |
-| Quét giao dịch treo | Bất đồng bộ, mỗi 5 phút | Xử lý tình huống service chết giữa chừng |
+| Lưu giao dịch `failed` | Đồng bộ, transaction riêng sau rollback và sau khi trả connection | Giữ lại lý do lỗi mà không ảnh hưởng rollback. Lưu lỗi thì chỉ ghi log, client vẫn nhận `422` |
+| Phát hiện bất thường | Bất đồng bộ qua outbox. Xử lý lại không tạo cảnh báo trùng nhờ unique `(transaction_id, rule_code)` trên `fraud_flags` kèm `ON CONFLICT DO NOTHING` (dự kiến tuần 8) | Không làm chậm chuyển tiền, không mất sự kiện khi crash ([ADR 007](../adr/007-outbox-postgresql.md)) |
+| Chấm điểm rủi ro | Bất đồng bộ với chuyển tiền. Worker gọi đồng bộ, có timeout | Chỉ gắn cờ, không chặn chuyển tiền |
+| Đối soát | Bất đồng bộ, worker chạy mỗi ngày. Admin chạy tay qua `POST /api/reconciliation/run` thì đồng bộ trong request | Việc nặng, không cần ngay. Đọc trên snapshot `REPEATABLE READ`, không khóa bảng, nên chạy song song với chuyển tiền vẫn an toàn |
+| Quét giao dịch treo | Bất đồng bộ, worker chạy mỗi 5 phút | Xử lý tình huống service chết giữa chừng. Hiện chuyển tiền ghi thẳng `completed` nên đây là lớp phòng thủ: chưa có sổ cái thì chuyển `failed`, đã có thì báo kiểm tra tay |
 | Gửi email cảnh báo | Bất đồng bộ | Lỗi email không ảnh hưởng nghiệp vụ |
+| Backup database | Bất đồng bộ, mỗi giờ (dự kiến tuần 9) | Đạt mục tiêu mất tối đa 1 giờ dữ liệu (mục 9) |
 
 ## 6. Giao diện
 
@@ -296,13 +301,13 @@ Mọi API dùng JSON, xác thực bằng token Bearer, lỗi theo định dạng
 | 6 | `PATCH /api/operator/accounts/:id/status` | Khóa, mở tài khoản | HTTPS, JSON | Web client (Operator) | Vào | Reverse proxy | Đồng bộ | Hiếm | Internet, cổng 443 | Ghi audit log |
 | 7 | `GET`, `PATCH /api/operator/fraud-flags` | Xem, xử lý cảnh báo | HTTPS, JSON | Web client (Operator) | Vào | Reverse proxy | Đồng bộ | Theo yêu cầu | Internet, cổng 443 | Dự kiến tuần 8 |
 | 8 | `GET /api/audit-logs` | Tra cứu audit log | HTTPS, JSON | Web client (Auditor) | Vào | Reverse proxy | Đồng bộ | Theo yêu cầu | Internet, cổng 443 | Chỉ đọc |
-| 9 | `POST /api/reconciliation/run`, `GET /api/reconciliation/reports` | Chạy, xem đối soát | HTTPS, JSON | Web client (Admin, Auditor) | Vào | Reverse proxy | Đồng bộ | Hằng ngày | Internet, cổng 443 | Review (#15) |
+| 9 | `POST /api/reconciliation/run`, `GET /api/reconciliation/reports`, `GET /api/reconciliation/reports/:id` | Chạy, xem đối soát | HTTPS, JSON | Web client (Admin, Auditor) | Vào | Reverse proxy | Đồng bộ | Hằng ngày | Internet, cổng 443 | Auditor chỉ xem, admin chạy tay |
 | 10 | `GET /api/admin/users`, `PATCH /api/admin/users/:id/status` | Quản lý user | HTTPS, JSON | Web client (Admin) | Vào | Reverse proxy | Đồng bộ | Hiếm | Internet, cổng 443 | |
 | 11 | `GET /api/health` | Kiểm tra ứng dụng và database | HTTP, JSON | Container runtime, uptime check | Vào | Không qua gateway khi kiểm tra trong máy | Đồng bộ | Mỗi 10 giây | Mạng nội bộ của máy | DB lỗi thì `503` |
 | 12 | Dịch vụ chấm điểm | Lấy điểm rủi ro của giao dịch | HTTP, JSON | Worker | Ra | Không | Đồng bộ, có timeout | Mỗi giao dịch | Mạng nội bộ của máy | Dự kiến tuần 11 |
 | 13 | Máy chủ SMTP | Gửi email cảnh báo | SMTP, TLS | Worker | Ra | Không | Bất đồng bộ | Khi có cảnh báo | Internet | Dự kiến |
 | 14 | Nhà cấp chứng chỉ | Xin, gia hạn chứng chỉ HTTPS | ACME | Reverse proxy | Ra | Không | Bất đồng bộ | Khoảng 60 ngày một lần | Internet, cổng 80 để xác minh | |
-| 15 | SSH vào máy chủ | Deploy bản mới | SSH | Hệ thống CI/CD | Vào | Không | Đồng bộ | Mỗi lần merge `main` | Internet, cổng 22 chỉ mở tạm | Đang làm |
+| 15 | SSH vào máy chủ | Deploy bản mới | SSH | Hệ thống CI/CD | Vào | Không | Đồng bộ | Mỗi lần merge `main` | Internet, cổng 22 chỉ mở tạm | Review (#20) |
 
 ## 7. Kiến trúc triển khai
 
