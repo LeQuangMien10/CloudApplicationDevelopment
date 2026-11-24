@@ -22,7 +22,7 @@ Các con số là mục tiêu thiết kế, kiểm chứng theo cột "Cách ki�
 |---|---|---|
 | Trừ tiền xong nhưng cộng tiền lỗi | Trừ và cộng nằm chung một DB transaction, lỗi thì rollback cả hai | `backend/test/rollback.e2e-spec.ts` |
 | Client timeout rồi gửi lại | Server thấy key đã xử lý thì trả lại kết quả cũ | `backend/test/transfer.e2e-spec.ts` |
-| Service chết giữa giao dịch | Transaction chưa commit thì PostgreSQL tự rollback. Job quét giao dịch treo **(cần chốt người làm)** | Kịch bản kill container tuần 10 |
+| Service chết giữa giao dịch | Transaction chưa commit thì PostgreSQL tự rollback. Job quét giao dịch treo (TV1): giao dịch `processing` quá 15 phút mà chưa có sổ cái thì chuyển `failed`, đã có sổ cái thì báo kiểm tra tay. Đối soát (F7) phát hiện mọi lệch còn sót | `backend/test/stuck-transactions.e2e-spec.ts`, `reconciliation.e2e-spec.ts`. Kịch bản kill container tuần 10 |
 | Hai lệnh chuyển cùng lúc trên một tài khoản | Khóa dòng bằng `SELECT ... FOR UPDATE` theo thứ tự cố định | `backend/test/deadlock.e2e-spec.ts` |
 
 ## 3. Ràng buộc kỹ thuật

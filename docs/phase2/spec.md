@@ -2,7 +2,7 @@
 
 Tính năng nâng cao, bảo mật và AI, tuần 7 đến tuần 12. Chốt trong buổi họp 03/11/2026. Phần Cloud xem [phase-cloud](../phase-cloud/spec.md).
 
-**Hai yêu cầu chưa có người làm** (cần chốt): Operator nạp tiền mô phỏng (UC1) và job quét giao dịch treo ở `processing`. Đề xuất: Châu Anh và Nhật, tuần 8.
+**Yêu cầu chưa có người làm** (cần chốt): Operator nạp tiền mô phỏng (UC1). Đề xuất: Châu Anh, tuần 8. Job quét giao dịch treo ở `processing` do TV1 làm cùng F7, xem [sequence-doi-soat.md](../sequence-doi-soat.md).
 
 Phần thiết kế API và bảng dưới đây là bản dự kiến để mọi người làm thống nhất. Người phụ trách được chỉnh khi làm, nhưng phải cập nhật [api.md](../api.md), [database.md](../database.md) trong cùng PR.
 
