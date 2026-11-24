@@ -2,7 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
-import { DataSource } from 'typeorm';
+import { DataSource, Repository, ObjectLiteral } from 'typeorm';
 import { vi } from 'vitest';
 import {
   Account,
@@ -779,6 +779,144 @@ describe('POST /api/transactions/transfer (DB thật)', () => {
       });
       await expect(eventsOf(failed.id)).resolves.toHaveLength(0);
       await expect(eventCountFromSender()).resolves.toBe(before);
+    });
+  });
+
+  describe('gửi đồng thời cùng Idempotency-Key', () => {
+    const send = (idempotencyKey: string, body: object) =>
+      request(app.getHttpServer())
+        .post(transferPath)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('Idempotency-Key', idempotencyKey)
+        .send(body);
+    const transfersOfTest = (status: TransactionStatus) =>
+      dataSource.getRepository(Transaction).findBy({
+        fromAccountId: sender.id,
+        status,
+        description: transferBody().description,
+      });
+    const eventCountFromSender = () =>
+      dataSource
+        .getRepository(OutboxEvent)
+        .createQueryBuilder('event')
+        .where("event.payload->>'fromAccountId' = :accountId", {
+          accountId: sender.id,
+        })
+        .getCount();
+
+    // Request đầu dừng ngay sau khi giữ chỗ key, transaction chưa commit.
+    // Chỉ chặn lần gọi đầu: request sau (nếu chạy lại từ đầu) đi qua bình thường
+    const pauseAfterFirstReservation = () => {
+      const originalFindOneByOrFail = Repository.prototype.findOneByOrFail;
+      let release!: () => void;
+      const released = new Promise<void>((resolve) => (release = resolve));
+      let markReached!: () => void;
+      const reached = new Promise<void>((resolve) => (markReached = resolve));
+      let calls = 0;
+      vi.spyOn(Repository.prototype, 'findOneByOrFail').mockImplementation(
+        async function (this: Repository<ObjectLiteral>, ...args: unknown[]) {
+          if (this.metadata.target === IdempotencyKey && ++calls === 1) {
+            markReached();
+            await released;
+          }
+          return (originalFindOneByOrFail as Function).apply(this, args);
+        },
+      );
+      return { reached, release };
+    };
+
+    // Request sau phải đứng chờ ở lệnh INSERT giữ chỗ key, vì request đầu chưa commit
+    // dòng cùng (user_id, key). Các file e2e chạy tuần tự nên không đếm nhầm khóa của test khác
+    const waitUntilSecondBlocked = async () => {
+      for (let i = 0; i < 50; i++) {
+        const [{ waiting }] = (await ownerDataSource.query(
+          `SELECT count(*)::int AS waiting FROM pg_locks WHERE locktype = 'transactionid' AND NOT granted`,
+        )) as { waiting: number }[];
+        if (waiting > 0) return;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      throw new Error('Request thứ hai không chờ khóa giữ chỗ key của request đầu');
+    };
+
+    const sendConcurrently = async (idempotencyKey: string, body: object) => {
+      const { reached, release } = pauseAfterFirstReservation();
+      // .then() để supertest gửi request ngay, không đợi tới lúc await
+      const first = send(idempotencyKey, body).then((res) => res);
+      try {
+        await reached;
+        const second = send(idempotencyKey, body).then((res) => res);
+        await waitUntilSecondBlocked();
+        release();
+        return await Promise.all([first, second]);
+      } finally {
+        // Luôn thả request đầu, kể cả khi test lỗi, để không treo connection
+        release();
+      }
+    };
+
+    it('22. hai request cùng key gửi đồng thời: chỉ trừ tiền một lần, cả hai nhận cùng kết quả', async () => {
+      const amount = '1000.50';
+      const eventsBefore = await eventCountFromSender();
+
+      const [first, second] = await sendConcurrently(
+        key(),
+        transferBody(amount),
+      );
+
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(201);
+      expect(second.body).toEqual(first.body);
+
+      const completed = await transfersOfTest(TransactionStatus.COMPLETED);
+      expect(completed).toHaveLength(1);
+      expect(completed[0].id).toBe(first.body.transaction.id);
+      await expect(
+        dataSource
+          .getRepository(LedgerEntry)
+          .countBy({ transactionId: completed[0].id }),
+      ).resolves.toBe(2);
+      await expect(
+        dataSource.getRepository(Account).findOneByOrFail({ id: sender.id }),
+      ).resolves.toMatchObject({
+        balance: adjustBalance(senderBalance, amount, -1n),
+      });
+      await expect(
+        dataSource.getRepository(Account).findOneByOrFail({ id: recipient.id }),
+      ).resolves.toMatchObject({
+        balance: adjustBalance(recipientBalance, amount, 1n),
+      });
+      await expect(eventCountFromSender()).resolves.toBe(eventsBefore + 1);
+    });
+
+    it('23. hai request cùng key gửi đồng thời đều thất bại: cả hai nhận 422, chỉ lưu một giao dịch failed', async () => {
+      const idempotencyKey = key();
+      const eventsBefore = await eventCountFromSender();
+
+      const [first, second] = await sendConcurrently(
+        idempotencyKey,
+        transferBody('10000000.01'),
+      );
+
+      expect(first.status).toBe(422);
+      expect(second.status).toBe(422);
+      expect(first.body.code).toBe('INSUFFICIENT_FUNDS');
+      expect(second.body.code).toBe('INSUFFICIENT_FUNDS');
+
+      const failed = await transfersOfTest(TransactionStatus.FAILED);
+      expect(failed).toHaveLength(1);
+      await expect(transfersOfTest(TransactionStatus.COMPLETED)).resolves.toHaveLength(0);
+      await expect(
+        dataSource
+          .getRepository(IdempotencyKey)
+          .findOneByOrFail({ userId: senderUserId, key: idempotencyKey }),
+      ).resolves.toMatchObject({
+        transactionId: failed[0].id,
+        responseCode: 422,
+      });
+      await expect(
+        dataSource.getRepository(Account).findOneByOrFail({ id: sender.id }),
+      ).resolves.toMatchObject({ balance: senderBalance });
+      await expect(eventCountFromSender()).resolves.toBe(eventsBefore);
     });
   });
 });
