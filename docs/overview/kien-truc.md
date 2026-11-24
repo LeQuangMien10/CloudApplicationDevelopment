@@ -95,7 +95,7 @@ Phần đã chạy trên `main`: backend (Auth, Users, Accounts, Transactions v�
 | Chấm điểm rủi ro bằng Isolation Forest (tuần 11) | Bất đồng bộ: worker gọi dịch vụ Python | Chỉ gắn cờ, không chặn chuyển tiền |
 | Đối soát | Bất đồng bộ, worker chạy mỗi ngày | Việc nặng, không cần ngay |
 | Gửi email cảnh báo (dự kiến, chờ phân công) | Bất đồng bộ: worker gửi qua SMTP khi có giao dịch bị gắn cờ, tới Operator, Auditor và Admin | Không làm chậm chuyển tiền, lỗi SMTP không ảnh hưởng nghiệp vụ |
-| Quét giao dịch treo ở `processing` (**cần chốt** người làm) | Bất đồng bộ, worker chạy định kỳ | Xử lý tình huống service chết giữa chừng. Hiện chuyển tiền ghi thẳng `completed`, chưa có giao dịch nào ở `processing` |
+| Quét giao dịch treo ở `processing` (TV1) | Bất đồng bộ, chạy định kỳ mỗi 5 phút | Xử lý tình huống service chết giữa chừng: chưa có sổ cái thì chuyển `failed`, đã có sổ cái thì báo kiểm tra tay. Hiện chuyển tiền ghi thẳng `completed`, nên đây là lớp phòng thủ |
 
 ## 4. Luồng chuyển tiền
 

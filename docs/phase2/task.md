@@ -8,10 +8,10 @@
 | F4 | Lưu giao dịch thất bại | TV3 | 7 | Xong (#12) |
 | | API tra cứu tài khoản cho Operator | TV2 | 8 | Issue #11 |
 | | Nạp tiền mô phỏng | Cần chốt | 8 | Chưa làm |
-| | Job quét giao dịch treo | Cần chốt | 8 | Chưa làm |
-| F5 | Outbox và worker | TV3 | 8 | Đang làm: bảng outbox và ghi sự kiện (PR 1) đang review, worker chưa làm |
+| | Job quét giao dịch treo | TV1 | 8 | Đang review, cùng PR với F7. Chạy mỗi 5 phút bằng worker (F5) hoặc cron, chưa gắn lịch |
+| F5 | Outbox và worker | TV3 | 8 | Đang làm: bảng outbox và ghi sự kiện xong (#14), worker chưa làm |
 | F6 | Luật phát hiện bất thường | TV3 | 8 | Chưa làm |
-| F7 | Đối soát | TV1 | 8 | Chưa làm |
+| F7 | Đối soát | TV1 | 8 | Đang review. Chạy định kỳ bằng worker (F5) hoặc cron, chưa gắn lịch |
 | F8 | Màn hình Operator, Auditor | TV4 | 8 | Chưa làm |
 | F9 | Rate limit, khóa đăng nhập | TV2 | 9 | Chưa làm |
 | F10 | Threat model | TV2, TV5 | 9 | Chưa làm |
