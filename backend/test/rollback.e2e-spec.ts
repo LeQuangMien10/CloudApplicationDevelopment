@@ -13,6 +13,7 @@ import { IdempotencyKey } from '../src/transactions/entities/idempotency-key.ent
 import { LedgerEntry } from '../src/transactions/entities/ledger-entry.entity.js';
 import { Transaction, TransactionType } from '../src/transactions/entities/transaction.entity.js';
 import { User } from '../src/users/entities/user.entity.js';
+import { OutboxEvent } from '../src/outbox/entities/outbox-event.entity.js';
 import {
   openOwnerDataSource,
   withLedgerMaintenance,
@@ -104,7 +105,24 @@ describe('POST /api/transactions/transfer - rollback khi lỗi giữa chừng', 
         .getRepository(IdempotencyKey)
         .findOneBy({ userId: senderUserId, key: idempotencyKey }),
     ).resolves.toBeNull();
+
+    // Giao dịch rollback thì sự kiện outbox cũng rollback
+    expect(await outboxEventCountFromSender()).toBe(outboxBaseline);
   };
+
+  // File test khác có thể để lại sự kiện của cùng tài khoản, nên so với số đếm trước mỗi test
+  let outboxBaseline: number;
+  const outboxEventCountFromSender = () =>
+    dataSource
+      .getRepository(OutboxEvent)
+      .createQueryBuilder('event')
+      .where("event.payload->>'fromAccountId' = :accountId", {
+        accountId: sender.id,
+      })
+      .getCount();
+  beforeEach(async () => {
+    outboxBaseline = await outboxEventCountFromSender();
+  });
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -155,6 +173,20 @@ describe('POST /api/transactions/transfer - rollback khi lỗi giữa chừng', 
         .from(LedgerEntry)
         .where(
           'transaction_id IN (SELECT id FROM transactions WHERE initiated_by = :userId AND type = :type AND description LIKE :description)',
+          {
+            userId: senderUserId,
+            type: TransactionType.TRANSFER,
+            description: 'E2E transfer: rollback%',
+          },
+        )
+        .execute();
+      // outbox_events không có khóa ngoại tới transactions, dọn theo payload
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(OutboxEvent)
+        .where(
+          "payload->>'transactionId' IN (SELECT id::text FROM transactions WHERE initiated_by = :userId AND type = :type AND description LIKE :description)",
           {
             userId: senderUserId,
             type: TransactionType.TRANSFER,
@@ -233,6 +265,23 @@ describe('POST /api/transactions/transfer - rollback khi lỗi giữa chừng', 
   it('5. rollback khi ghi LedgerEntry bị lỗi', async () => {
     const idempotencyKey = key();
     failLedgerSave();
+
+    await send(idempotencyKey).expect(500);
+    await expectNothingPersisted(idempotencyKey);
+  });
+
+  // Ghi sự kiện là bước cuối trước COMMIT: lỗi ở đây phải hoàn tác cả chuyển tiền
+  it('6. rollback khi ghi sự kiện outbox bị lỗi', async () => {
+    const idempotencyKey = key();
+    const originalInsert = EntityManager.prototype.insert;
+    vi
+      .spyOn(EntityManager.prototype, 'insert')
+      .mockImplementation(function (this: EntityManager, ...args: unknown[]) {
+        if (args[0] === OutboxEvent) {
+          throw new Error('Simulated outbox DB failure');
+        }
+        return (originalInsert as Function).apply(this, args);
+      });
 
     await send(idempotencyKey).expect(500);
     await expectNothingPersisted(idempotencyKey);
