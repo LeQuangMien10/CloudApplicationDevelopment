@@ -12,6 +12,7 @@ Phụ trách: **TV5 Hiếu**.
 | Chạy local | `docker-compose.yml` | Service `db`, `backend`, `frontend`, `caddy`. Backend chờ DB healthy rồi mới chạy |
 | HTTPS | `infra/Caddyfile`, service `caddy` | Caddy đứng trước nginx, tự xin và gia hạn chứng chỉ Let's Encrypt cho `DOMAIN`, tự chuyển HTTP sang HTTPS. Chỉ Caddy mở cổng ra ngoài (80, 443), các service khác chỉ nghe ở `127.0.0.1` |
 | CI | `.github/workflows/ci.yml` | Mỗi PR vào `main`: backend (lint, unit test, build, migration, e2e có Postgres), frontend (lint, build), build image Docker cả hai |
+| CD | `.github/workflows/deploy.yml`, `infra/deploy.sh` | CI trên `main` xanh thì tự SSH vào EC2 và `docker compose up -d --build`, kiểm tra `/api/health` |
 
 ## Chạy bằng Docker
 
@@ -57,7 +58,59 @@ Cách làm: một máy EC2 Ubuntu chạy `docker compose`, giống như chạy l
 
 Không xóa volume `caddy_data` (đừng dùng `docker compose down -v` trên server): nó chứa chứng chỉ, xóa đi thì Caddy phải xin lại, Let's Encrypt giới hạn 5 lần mỗi tuần cho cùng một domain.
 
-Cập nhật bản mới: `git pull && docker compose up -d --build`. Migration tự chạy khi container khởi động.
+Cập nhật bản mới: tự động khi merge vào `main` (mục dưới). Chạy tay: `git pull && bash infra/deploy.sh`. Migration tự chạy khi container khởi động.
+
+## Tự động deploy khi merge `main`
+
+Workflow `.github/workflows/deploy.yml`:
+
+1. PR merge vào `main` → workflow **CI** chạy trên `main`.
+2. CI xanh → workflow **Deploy** chạy (CI đỏ thì không deploy). Chạy tay được ở tab Actions → Deploy → *Run workflow*.
+3. Deploy tạm mở cổng 22 trong security group cho IP của runner GitHub, SSH vào Elastic IP, `git reset --hard <commit vừa qua CI>`, chạy `infra/deploy.sh` (`docker compose up -d --build`, dọn image cũ).
+4. Gọi `https://<DOMAIN>/api/health` tới khi trả `ok` (tối đa 150 giây), sau đó đóng cổng 22 lại (kể cả khi lỗi).
+
+Hai lần deploy không chạy cùng lúc. `.env` trên server không bị đụng tới vì không nằm trong git.
+
+### Cài đặt một lần
+
+**a. SSH key riêng cho CI** (không dùng lại file `.pem` của mình). Trên máy mình:
+
+```bash
+ssh-keygen -t ed25519 -N "" -C github-deploy -f deploy_key
+ssh -i banking.pem ubuntu@32.237.40.215 "cat >> ~/.ssh/authorized_keys" < deploy_key.pub
+ssh-keyscan -t ed25519 32.237.40.215     # lấy host key để ghim
+```
+
+**b. IAM user `github-deploy`** chỉ được thêm/xóa rule trên đúng security group của EC2. Tạo access key cho user này với policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress"],
+    "Resource": "arn:aws:ec2:ap-southeast-2:<ACCOUNT_ID>:security-group/<SG_ID>"
+  }]
+}
+```
+
+**c. GitHub:** Settings → Environments → tạo environment `production` (có thể giới hạn *Deployment branches* là `main`), thêm:
+
+| Loại | Tên | Giá trị |
+|---|---|---|
+| Secret | `EC2_HOST` | `32.237.40.215` |
+| Secret | `EC2_SSH_KEY` | Nội dung file `deploy_key` (private key) |
+| Secret | `EC2_KNOWN_HOSTS` | Dòng in ra từ `ssh-keyscan` ở bước a |
+| Secret | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Access key của `github-deploy` |
+| Variable | `AWS_REGION` | `ap-southeast-2` |
+| Variable | `EC2_SECURITY_GROUP_ID` | `sg-...` của EC2 |
+| Variable | `DOMAIN` | `insecurebanking.duckdns.org` |
+| Variable | `EC2_USER` (không bắt buộc) | Mặc định `ubuntu` |
+| Variable | `APP_DIR` (không bắt buộc) | Mặc định `~/CloudApplicationDevelopment` |
+
+Xong thì xóa `deploy_key` trên máy mình. Thử bằng *Run workflow* trước khi merge PR thật.
+
+**Lưu ý:** EC2 phải đang chạy thì deploy mới thành công. Máy đang Stop thì job Deploy đỏ ở bước SSH, Start máy rồi bấm *Re-run*. Build image ngay trên server, `t3.small` (2GB RAM) đủ dùng, máy nhỏ hơn có thể hết RAM khi build frontend.
 
 ## Database: user owner và user app
 

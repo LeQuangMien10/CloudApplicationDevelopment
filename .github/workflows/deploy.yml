@@ -1,0 +1,129 @@
+# Tự động deploy lên EC2 khi có code mới vào main.
+#
+# Chỉ chạy sau khi workflow CI trên main (push) chạy xong và xanh, nên code lỗi không lên server.
+# Có thể chạy tay ở tab Actions → Deploy → Run workflow (deploy commit mới nhất của main).
+#
+# Cách làm: runner SSH vào EC2 qua Elastic IP, kéo đúng commit vừa qua CI, chạy infra/deploy.sh
+# (docker compose up -d --build), rồi gọi https://<DOMAIN>/api/health để kiểm tra.
+# Cổng 22 của security group chỉ mở cho IP quản trị, nên trong lúc deploy workflow tạm thêm
+# rule cho IP của runner rồi xóa đi ở bước cuối (kể cả khi deploy lỗi).
+#
+# Cấu hình secrets, variables và IAM: xem infra/README.md, mục "Tự động deploy".
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# Không cho hai lần deploy chạy cùng lúc. Lần mới chờ lần cũ xong, không hủy giữa chừng
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # workflow_run cũng chạy khi CI đỏ hoặc CI của PR, nên chỉ nhận lần push vào main và CI xanh
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://${{ vars.DOMAIN }}
+    timeout-minutes: 20
+    env:
+      # workflow_run: commit vừa qua CI. Chạy tay: commit mới nhất của main
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      APP_DIR: ${{ vars.APP_DIR || '~/CloudApplicationDevelopment' }}
+      SG_ID: ${{ vars.EC2_SECURITY_GROUP_ID }}
+    steps:
+      - name: Kiểm tra cấu hình
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+          DOMAIN: ${{ vars.DOMAIN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          missing=0
+          for name in EC2_HOST EC2_SSH_KEY EC2_KNOWN_HOSTS DOMAIN AWS_REGION SG_ID; do
+            if [ -z "${!name}" ]; then echo "::error::Thiếu $name (xem infra/README.md, mục Tự động deploy)"; missing=1; fi
+          done
+          exit $missing
+
+      - name: Đăng nhập AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Mở cổng 22 tạm thời cho IP của runner
+        id: sg
+        run: |
+          ip=$(curl -fsS https://checkip.amazonaws.com | tr -d '[:space:]')
+          echo "ip=$ip" >> "$GITHUB_OUTPUT"
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" \
+            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=$ip/32,Description=github-actions-deploy}]"
+
+      - name: Cài SSH key
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Ghim host key của server, không tin bừa (chống giả mạo server)
+          printf '%s\n' "$EC2_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy trên EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ vars.EC2_USER || 'ubuntu' }}
+        run: |
+          # Chờ rule security group có hiệu lực
+          for i in $(seq 1 10); do
+            ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=5 "$EC2_USER@$EC2_HOST" true && break
+            echo "Chưa SSH được, thử lại ($i)"; sleep 3
+          done
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes "$EC2_USER@$EC2_HOST" \
+            "set -euo pipefail
+             cd $APP_DIR
+             git fetch --prune origin main
+             git checkout -q main
+             git reset -q --hard $DEPLOY_SHA
+             bash infra/deploy.sh"
+
+      - name: Kiểm tra /api/health
+        env:
+          DOMAIN: ${{ vars.DOMAIN }}
+        run: |
+          for i in $(seq 1 30); do
+            if body=$(curl -fsS "https://$DOMAIN/api/health"); then
+              echo "$body"
+              echo "$body" | grep -q '"status":"ok"' && exit 0
+            fi
+            echo "Chưa sẵn sàng, thử lại ($i)"; sleep 5
+          done
+          echo "::error::https://$DOMAIN/api/health không trả ok sau 150 giây"
+          exit 1
+
+      - name: Đóng cổng 22 đã mở
+        if: always() && steps.sg.outputs.ip != ''
+        run: |
+          aws ec2 revoke-security-group-ingress \
+            --group-id "$SG_ID" \
+            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${{ steps.sg.outputs.ip }}/32}]"
+
+      - name: Xóa SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
