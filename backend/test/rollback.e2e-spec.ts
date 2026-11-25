@@ -4,7 +4,13 @@ import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
-import { DataSource, EntityManager, Repository, ObjectLiteral } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  Repository,
+  ObjectLiteral,
+  UpdateQueryBuilder,
+} from 'typeorm';
 import { vi } from 'vitest';
 import { Account } from '../src/accounts/entities/account.entity.js';
 import { setupApp } from '../src/app.setup.js';
@@ -14,6 +20,7 @@ import { LedgerEntry } from '../src/transactions/entities/ledger-entry.entity.js
 import { Transaction, TransactionType } from '../src/transactions/entities/transaction.entity.js';
 import { User } from '../src/users/entities/user.entity.js';
 import { OutboxEvent } from '../src/outbox/entities/outbox-event.entity.js';
+import { AuditAction, AuditLog } from '../src/audit/entities/audit-log.entity.js';
 import {
   openOwnerDataSource,
   withLedgerMaintenance,
@@ -285,5 +292,58 @@ describe('POST /api/transactions/transfer - rollback khi lỗi giữa chừng', 
 
     await send(idempotencyKey).expect(500);
     await expectNothingPersisted(idempotencyKey);
+  });
+
+  // Tình huống của đề: trừ tiền xong nhưng cộng tiền lỗi
+  it('7. rollback khi lệnh cộng tiền vào tài khoản nhận bị lỗi, sau khi đã trừ tiền', async () => {
+    const idempotencyKey = key();
+    const originalExecute = UpdateQueryBuilder.prototype.execute;
+    let debitExecuted = 0;
+    vi
+      .spyOn(UpdateQueryBuilder.prototype, 'execute')
+      .mockImplementation(async function (this: UpdateQueryBuilder<ObjectLiteral>, ...args: unknown[]) {
+        // transfer() đặt balance bằng biểu thức SQL: 'balance - :amount' để trừ, 'balance + :amount' để cộng
+        const balance = (this.expressionMap.valuesSet as ObjectLiteral | undefined)?.balance;
+        const expression = typeof balance === 'function' ? balance() : undefined;
+        if (expression === 'balance + :amount') {
+          throw new Error('Simulated credit failure');
+        }
+        const result = await (originalExecute as Function).apply(this, args);
+        if (expression === 'balance - :amount') debitExecuted++;
+        return result;
+      });
+
+    await send(idempotencyKey).expect(500);
+
+    // Lệnh trừ đã chạy trong transaction trước khi lệnh cộng lỗi
+    expect(debitExecuted).toBe(1);
+    await expectNothingPersisted(idempotencyKey);
+  });
+
+  // Audit log ghi trong cùng transaction: lỗi ghi log thì không được giữ lại chuyển tiền
+  it('8. rollback khi ghi audit log bị lỗi', async () => {
+    const idempotencyKey = key();
+    const auditCount = async () =>
+      (
+        (await dataSource.query(
+          'SELECT count(*)::int AS count FROM audit_logs WHERE actor_id = $1 AND action = $2',
+          [senderUserId, AuditAction.TRANSFER_COMPLETED],
+        )) as { count: number }[]
+      )[0].count;
+    const auditBaseline = await auditCount();
+
+    const originalInsert = EntityManager.prototype.insert;
+    vi
+      .spyOn(EntityManager.prototype, 'insert')
+      .mockImplementation(function (this: EntityManager, ...args: unknown[]) {
+        if (args[0] === AuditLog) {
+          throw new Error('Simulated audit log DB failure');
+        }
+        return (originalInsert as Function).apply(this, args);
+      });
+
+    await send(idempotencyKey).expect(500);
+    await expectNothingPersisted(idempotencyKey);
+    expect(await auditCount()).toBe(auditBaseline);
   });
 });
