@@ -58,4 +58,4 @@ Số giả định, dùng để chọn kiến trúc và đặt mức load test:
 | Architecture | Modular monolith và worker chạy nền ([kien-truc.md](../overview/kien-truc.md), ADR 001, 003) |
 | Cloud | AWS, một máy EC2 chạy docker compose ở giai đoạn này (ADR 006) |
 | Security | JWT, phân quyền 4 vai trò, sổ cái và audit log bảo vệ ở tầng DB, HTTPS |
-| Cost | Dưới 30 USD mỗi tháng khi demo **(cần chốt)** |
+| Cost | Dưới 30 USD mỗi tháng khi demo |
