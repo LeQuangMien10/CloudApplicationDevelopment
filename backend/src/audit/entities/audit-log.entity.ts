@@ -22,9 +22,16 @@ export enum AuditAction {
   ACCOUNT_UNFROZEN = 'account_unfrozen',
   TRANSFER_COMPLETED = 'transfer_completed',
   TRANSFER_FAILED = 'transfer_failed',
+  RECONCILIATION_RUN = 'reconciliation_run',
+  TRANSACTION_TIMED_OUT = 'transaction_timed_out',
 }
 
-export type AuditTargetType = 'user' | 'account' | 'transaction' | 'fraud_flag';
+export type AuditTargetType =
+  | 'user'
+  | 'account'
+  | 'transaction'
+  | 'fraud_flag'
+  | 'reconciliation_report';
 
 @Entity('audit_logs')
 @Index('idx_audit_logs_actor_created', ['actorId', 'createdAt'])

@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AccountsModule } from '../accounts/accounts.module.js';
 import { AuditModule } from '../audit/audit.module.js';
+import { OutboxModule } from '../outbox/outbox.module.js';
 import { parsePositiveInt } from '../auth/auth.module.js';
 
 import { IdempotencyKey } from './entities/idempotency-key.entity.js';
@@ -21,6 +22,7 @@ import { LedgerPostingService } from './services/ledger-posting.service.js';
     TypeOrmModule.forFeature([Transaction, LedgerEntry, IdempotencyKey, Account]),
     AccountsModule,
     AuditModule,
+    OutboxModule,
     // F9: rate limit chuyển khoản theo user, ngưỡng chỉnh qua env
     ThrottlerModule.forRoot([
       {

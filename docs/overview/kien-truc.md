@@ -95,7 +95,7 @@ Phần đã chạy trên `main`: backend (Auth, Users, Accounts, Transactions v�
 | Chấm điểm rủi ro bằng Isolation Forest (tuần 11) | Bất đồng bộ: worker gọi dịch vụ Python | Chỉ gắn cờ, không chặn chuyển tiền |
 | Đối soát | Bất đồng bộ, worker chạy mỗi ngày | Việc nặng, không cần ngay |
 | Gửi email cảnh báo (dự kiến, chờ phân công) | Bất đồng bộ: worker gửi qua SMTP khi có giao dịch bị gắn cờ, tới Operator, Auditor và Admin | Không làm chậm chuyển tiền, lỗi SMTP không ảnh hưởng nghiệp vụ |
-| Quét giao dịch treo ở `processing` (**cần chốt** người làm) | Bất đồng bộ, worker chạy định kỳ | Xử lý tình huống service chết giữa chừng. Hiện chuyển tiền ghi thẳng `completed`, chưa có giao dịch nào ở `processing` |
+| Quét giao dịch treo ở `processing` (TV1) | Bất đồng bộ, chạy định kỳ mỗi 5 phút | Xử lý tình huống service chết giữa chừng: chưa có sổ cái thì chuyển `failed`, đã có sổ cái thì báo kiểm tra tay. Hiện chuyển tiền ghi thẳng `completed`, nên đây là lớp phòng thủ |
 
 ## 4. Luồng chuyển tiền
 
@@ -107,7 +107,7 @@ Chi tiết: [sequence-chuyen-tien.md](../sequence-chuyen-tien.md).
    - Key đã có, khác nội dung: `409`.
 3. Khóa hai tài khoản bằng `SELECT ... FOR UPDATE` **theo thứ tự số tài khoản** (ADR 004).
 4. Kiểm tra: tài khoản nguồn thuộc user, hai bên `active`, đủ số dư.
-5. Cập nhật số dư bằng SQL (`balance = balance - :amount`), ghi giao dịch `completed`, 2 dòng sổ cái, audit log (F4, chưa merge), sự kiện `outbox_events` (F5, tuần 8), lưu response vào idempotency key.
+5. Cập nhật số dư bằng SQL (`balance = balance - :amount`), ghi giao dịch `completed`, 2 dòng sổ cái, audit log (F4), sự kiện `outbox_events` (F5), lưu response vào idempotency key.
 6. Commit. Lỗi ở bất kỳ bước nào thì rollback toàn bộ.
 
 DB kiểm tra thêm lúc commit: giao dịch `completed` phải có đúng 1 dòng debit và 1 dòng credit cân nhau, sai thì commit bị từ chối (ADR 005).
