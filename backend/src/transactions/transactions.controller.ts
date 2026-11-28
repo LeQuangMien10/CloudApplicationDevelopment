@@ -17,6 +17,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
+import { TransferThrottlerGuard } from './transfer-throttler.guard.js';
 import { ListTransactionsQuery } from './dto/list-transactions.query.js';
 import { TransferDto } from './dto/transfer.dto.js';
 import { TransactionsService } from './transactions.service.js';
@@ -34,7 +35,7 @@ export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
   @Post('transfer')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TransferThrottlerGuard)
   @ApiOperation({ summary: 'Chuyển khoản nội bộ trong 1 DB transaction' })
   @ApiHeader({
     name: 'Idempotency-Key',
@@ -59,6 +60,11 @@ export class TransactionsController {
     status: 422,
     description:
       'SENDER_ACCOUNT_NOT_ACTIVE, TARGET_ACCOUNT_NOT_ACTIVE, INSUFFICIENT_FUNDS (lưu giao dịch failed); SAME_ACCOUNT',
+  })
+  @ApiResponse({
+    status: 429,
+    description:
+      'RATE_LIMITED: vượt 30 lần chuyển trong một phút của cùng user (F9), kèm details.retryAfter',
   })
   transfer(
     @Headers('idempotency-key') idempotencyKey: string | undefined,

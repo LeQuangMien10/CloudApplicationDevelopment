@@ -1,9 +1,11 @@
 // trasactions.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AccountsModule } from '../accounts/accounts.module.js';
 import { AuditModule } from '../audit/audit.module.js';
 import { OutboxModule } from '../outbox/outbox.module.js';
+import { parsePositiveInt } from '../common/throttling/env-limits.js';
 
 import { IdempotencyKey } from './entities/idempotency-key.entity.js';
 import { LedgerEntry } from './entities/ledger-entry.entity.js';
@@ -21,6 +23,15 @@ import { LedgerPostingService } from './services/ledger-posting.service.js';
     AccountsModule,
     AuditModule,
     OutboxModule,
+    // F9: rate limit chuyển khoản theo user, ngưỡng chỉnh qua env
+    ThrottlerModule.forRoot([
+      {
+        name: 'transfer-user',
+        ttl: 60_000,
+        limit: () =>
+          parsePositiveInt(process.env.RATE_LIMIT_TRANSFER_PER_MIN, 30),
+      },
+    ]),
   ],
   controllers: [TransactionsController],
   providers: [TransactionsService, LedgerPostingService],

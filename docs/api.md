@@ -26,6 +26,7 @@ Thiết kế dự kiến để các thành viên làm thống nhất. Người p
 |---|---|---|---|---|---|---|
 | GET | `/api/audit-logs?actorId=&action=&from=&to=&requestId=&page=&limit=` | Auditor, Admin | Tra cứu audit log (F2) | TV2 | 7 | **Xong** |
 | PATCH | `/api/operator/accounts/:id/status` | Operator, Admin | Khóa, mở tài khoản ngân hàng, body `{ status: "frozen" \| "active", reason }` (F3) | TV2 | 7 | **Xong** |
+| GET | `/api/operator/accounts?accountNumber=` | Operator, Auditor, Admin | Tra cứu tài khoản theo số tài khoản, trả `id` để gọi API khóa/mở (Issue #11) | TV2 | 8 | **Xong** |
 | GET | `/api/operator/fraud-flags?status=&page=&limit=` | Operator, Auditor, Admin | Danh sách cảnh báo bất thường (F6) | TV3 | 8 | Chưa |
 | PATCH | `/api/operator/fraud-flags/:id` | Operator, Admin | Xử lý cảnh báo, body `{ status: "confirmed" \| "dismissed", note }` (F6) | TV3 | 8 | Chưa |
 | GET | `/api/reconciliation/reports?status=&page=&limit=` | Auditor, Admin | Danh sách báo cáo đối soát (F7) | TV1 | 8 | **Xong** |
@@ -34,7 +35,7 @@ Thiết kế dự kiến để các thành viên làm thống nhất. Người p
 
 Thay đổi ở API cũ:
 - **Xong (F4, TV3):** chuyển khoản lỗi nghiệp vụ được lưu thành giao dịch `failed` kèm `failureReason`. `GET /api/transactions` và `GET /api/transactions/:id` trả cả giao dịch này cho bên gửi. Chi tiết xem mục `POST /api/transactions/transfer` bên dưới.
-- Đăng nhập và chuyển khoản có rate limit, vượt thì `429 RATE_LIMITED`. Sai mật khẩu nhiều lần thì tạm khóa đăng nhập (F9, TV2).
+- **Xong (F9, TV2):** đăng nhập giới hạn **5 lần/phút theo IP**, chuyển khoản **30 lần/phút theo user**, vượt thì `429 RATE_LIMITED` kèm `details.retryAfter` (giây). Sai mật khẩu đủ **5 lần trong 15 phút** thì tạm khóa đăng nhập: thử lại (kể cả đúng mật khẩu) trả `423 LOGIN_TEMPORARILY_LOCKED` cho đến khi lần sai cũ nhất rời khỏi cửa sổ 15 phút. Đăng nhập thành công đưa bộ đếm về 0. Chi tiết xem mục `POST /api/auth/login`.
 - Operator, Auditor xem được giao dịch của mọi tài khoản. Cách lọc chốt khi làm F1.
 
 ## Xác thực
@@ -79,7 +80,7 @@ await this.auditService.logStandalone({ action: AuditAction.AUTH_LOGIN_FAILED, .
 
 `requestId` và `ip` được `AuditService` tự lấy từ request context (AsyncLocalStorage do `RequestIdMiddleware` gắn), không cần truyền tham số. Thêm action mới trong enum `AuditAction` của `src/audit/entities/audit-log.entity.ts`.
 
-Danh sách action hiện có: `auth_register`, `auth_login_success`, `auth_login_failed`, `user_locked`, `user_unlocked`, `account_frozen` (F3), `account_unfrozen` (F3), `transfer_completed`, `transfer_failed` (F4), `reconciliation_run` (F7), `transaction_timed_out` (job quét giao dịch treo, `actorRole` là `system`). Nhật bổ sung `fraud_flag_reviewed` (F6); Châu Anh bổ sung `auth_login_locked` (F9).
+Danh sách action hiện có: `auth_register`, `auth_login_success`, `auth_login_failed`, `auth_login_locked` (F9), `user_locked`, `user_unlocked`, `account_frozen` (F3), `account_unfrozen` (F3), `transfer_completed`, `transfer_failed` (F4), `reconciliation_run` (F7), `transaction_timed_out` (job quét giao dịch treo, `actorRole` là `system`). Nhật bổ sung `fraud_flag_reviewed` (F6).
 
 ## Request và response
 
@@ -102,6 +103,21 @@ Mật khẩu ít nhất 8 ký tự, có cả chữ và số. Email được chuy
 // response
 { "accessToken": "<jwt>", "expiresIn": 900 }
 ```
+
+Rate limit và khóa đăng nhập (F9):
+
+| Ngưỡng | Giá trị mặc định | Đếm theo | Đổi bằng env |
+|---|---|---|---|
+| Đăng nhập | 5 lần/phút | IP | `RATE_LIMIT_LOGIN_PER_MIN` |
+| Chuyển khoản | 30 lần/phút | user | `RATE_LIMIT_TRANSFER_PER_MIN` |
+| Khóa đăng nhập | sai 5 lần trong 15 phút | email | hằng số trong `login-attempts.service.ts` |
+
+- Vượt ngưỡng rate limit → `429 RATE_LIMITED`, kèm `details.retryAfter` (giây):
+  `{"code":"RATE_LIMITED","message":"Quá nhiều yêu cầu, thử lại sau","requestId":"...","details":{"retryAfter":57}}`
+- Sai mật khẩu đủ 5 lần trong 15 phút → các lần thử sau (kể cả đúng mật khẩu) trả `423 LOGIN_TEMPORARILY_LOCKED` cho đến khi lần sai cũ nhất rời khỏi cửa sổ:
+  `{"code":"LOGIN_TEMPORARILY_LOCKED","message":"Đăng nhập tạm khóa do sai mật khẩu nhiều lần, thử lại sau","requestId":"...","details":{"retryAfter":842}}`
+- Khi cả hai cùng chạm ngưỡng, **429 theo IP thắng** trong suốt thời gian IP còn bị chặn (mặc định ~60 giây kể từ request thứ 6): request không chạm đến phần kiểm tra khóa theo email. Muốn quan sát `423`, chờ hết block, đổi IP, hoặc tăng `RATE_LIMIT_LOGIN_PER_MIN` (cách các test e2e của F9 dùng).
+- Mỗi lần thử đăng nhập được ghi vào bảng `login_attempts`; thành công giữa chừng đưa bộ đếm về 0 mà không cần xóa dòng cũ. Mọi lần bị khóa ghi audit log `auth_login_locked`. Mọi lần sai/thành công ghi `auth_login_failed`/`auth_login_success` như cũ.
 
 **`GET /api/auth/me`** → `200`
 
@@ -181,6 +197,12 @@ Mật khẩu ít nhất 8 ký tự, có cả chữ và số. Email được chuy
 
 ```json
 [ { "id": "<uuid>", "accountNumber": "100000000001", "balance": "10000000.00", "currency": "VND", "status": "active" } ]
+```
+
+**`GET /api/operator/accounts?accountNumber=100000000001`** → `200` (Issue #11). Dành cho staff, dùng ở màn hình Operator để lấy `id` rồi gọi API khóa/mở phía trên. `accountNumber` phải gồm đúng 12 chữ số (`400 VALIDATION_ERROR`), không tồn tại thì `404 ACCOUNT_NOT_FOUND`. Tài khoản quỹ vẫn trả về kèm `isSystem: true` (tra cứu của khách hàng `GET /api/accounts/lookup/:accountNumber` thì trả 404 với tài khoản quỹ). **Auditor không nhận `balance`, `currency`** (ma trận phân quyền không giao auditor xem số dư).
+
+```json
+{ "id": "<uuid>", "accountNumber": "100000000001", "fullName": "Nguyễn Văn An", "status": "active", "isSystem": false, "balance": "10000000.00", "currency": "VND" }
 ```
 
 **`PATCH /api/operator/accounts/:id/status`** → `200` (F3). Operator khóa tài khoản khi nghi ngờ gian lận: user vẫn đăng nhập và xem số dư, nhưng tài khoản không chuyển đi và không nhận tiền được (`422 SENDER/TARGET_ACCOUNT_NOT_ACTIVE`). `reason` bắt buộc khi `status = "frozen"`. Tài khoản quỹ `000000000000` không đổi được; tài khoản đã `closed` là trạng thái cuối (`422 ACCOUNT_CLOSED`). Gọi đúng trạng thái hiện có vẫn `200`, không ghi log trùng.
@@ -282,6 +304,7 @@ Mỗi response có header `X-Request-Id`. Client có thể tự gửi header nà
 | 422 | `SENDER_ACCOUNT_NOT_ACTIVE`, `TARGET_ACCOUNT_NOT_ACTIVE` | Tài khoản nguồn hoặc đích không ở trạng thái active, có lưu giao dịch `failed` (TV3) |
 | 422 | `INSUFFICIENT_FUNDS` | Số dư không đủ, có lưu giao dịch `failed` (TV3) |
 | 422 | `SAME_ACCOUNT` | Chuyển cho chính tài khoản nguồn, không lưu giao dịch `failed` (TV3) |
-| 429 | `RATE_LIMITED` | Gửi quá nhiều request (Phase 2, TV2) |
+| 423 | `LOGIN_TEMPORARILY_LOCKED` | Sai mật khẩu đủ 5 lần trong 15 phút, tạm khóa đến khi lần sai cũ nhất rời cửa sổ; `details.retryAfter` (giây). Kiểm tra trước khi chạy bcrypt (F9) |
+| 429 | `RATE_LIMITED` | Vượt rate limit: đăng nhập 5 lần/phút theo IP, chuyển khoản 30 lần/phút theo user; `details.retryAfter` (giây) (F9) |
 | 500 | `INTERNAL_ERROR` | Lỗi hệ thống, tra log bằng `requestId` |
 | 503 | `DB_UNAVAILABLE` | `/api/health` không kết nối được database (TV5) |

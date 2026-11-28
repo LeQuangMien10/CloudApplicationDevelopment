@@ -5,9 +5,15 @@ import {
 } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
+import { parseTrustProxyHops } from './common/throttling/env-limits.js';
 
 /** Cấu hình dùng chung cho main.ts và e2e test. */
 export function setupApp(app: INestApplication) {
+  // Request đi qua 2 lớp proxy (Caddy rồi nginx), xem parseTrustProxyHops. Tin đúng số lớp
+  // để req.ip là IP client thật: rate limit đăng nhập (F9) đếm theo IP và audit_logs.ip
+  // ghi IP của khách, không phải IP của proxy.
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set('trust proxy', parseTrustProxyHops(process.env.TRUST_PROXY_HOPS));
   app.setGlobalPrefix('api');
   app.enableCors({
     origin: process.env.CORS_ORIGIN?.split(',') ?? 'http://localhost:5173',

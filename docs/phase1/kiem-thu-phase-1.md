@@ -100,6 +100,33 @@ Tài khoản mẫu: `an@example.com`, `binh@example.com`, `chi@example.com` (m�
 | 5c.8 | Auditor xem audit log sau khi khóa/mở | Có `account_frozen` và `account_unfrozen` kèm `reason` | [ ] | |
 | 5c.9 | Đặt `status='closed'` bằng SQL cho một tài khoản, rồi khóa và mở bằng API | Đều `422 ACCOUNT_CLOSED`, không có log mới | [ ] | |
 
+## 5d. Operator, Auditor tra cứu tài khoản theo số tài khoản (Issue #11, làm bằng Swagger)
+
+| # | Thao tác | Kết quả mong đợi | Đạt | Ghi chú |
+|---|---|---|---|---|
+| 5d.1 | Operator `GET /api/operator/accounts?accountNumber=<số tài khoản của An>` | `200`, có `id`, `fullName`, `status`, `balance`, `currency`, `isSystem: false` | [ ] | |
+| 5d.2 | Auditor gọi như 5d.1 | `200` nhưng **không có** `balance`, `currency` | [ ] | |
+| 5d.3 | Admin gọi như 5d.1 | `200`, đủ trường như operator | [ ] | |
+| 5d.4 | Customer gọi API này | `403 FORBIDDEN` | [ ] | |
+| 5d.5 | Gọi không có token | `401` | [ ] | |
+| 5d.6 | Tra cứu số không tồn tại `999999999999` | `404 ACCOUNT_NOT_FOUND` | [ ] | |
+| 5d.7 | Tra cứu số 11 chữ số, số có chữ cái, thiếu tham số | Đều `400 VALIDATION_ERROR` | [ ] | |
+| 5d.8 | Tra cứu tài khoản quỹ `000000000000` | `200` với `isSystem: true` (khác tra cứu khách hàng trả 404) | [ ] | |
+| 5d.9 | Lấy `id` từ 5d.1 rồi gọi `PATCH /api/operator/accounts/:id/status` | Khóa/mở thành công (kết nối 2 API ở màn hình Operator) | [ ] | |
+
+## 5e. Rate limit và khóa đăng nhập (F9, làm bằng Swagger)
+
+| # | Thao tác | Kết quả mong đợi | Đạt | Ghi chú |
+|---|---|---|---|---|
+| 5e.1 | Đăng nhập sai mật khẩu 6 lần liên tiếp (cùng IP) | 5 lần đầu `401 INVALID_CREDENTIALS`, lần 6 `429 RATE_LIMITED` kèm `details.retryAfter` | [ ] | |
+| 5e.2 | Chờ `retryAfter` giây rồi đăng nhập sai tiếp bằng **email mới** | Về lại `401` (không còn bị 429; email cũ của 5e.1 vẫn `423` vì đã đủ 5 lần sai) | [ ] | |
+| 5e.3 | Sai mật khẩu một email 5 lần trong 15 phút, rồi đăng nhập ĐÚNG mật khẩu | `423 LOGIN_TEMPORARILY_LOCKED` kèm `details.retryAfter` ≤ 900. Lưu ý: làm ngay sau 5e.1 thì thấy `429` trước (IP còn bị chặn ~60s) — chờ hết block hoặc tăng `RATE_LIMIT_LOGIN_PER_MIN` để thấy `423` | [ ] | |
+| 5e.4 | Auditor `GET /api/audit-logs?action=auth_login_locked` | Có dòng `auth_login_locked` cho email bị khóa | [ ] | |
+| 5e.5 | Chuyển khoản 31 lần trong một phút bằng cùng một user | 30 lần đầu `201`, lần 31 `429 RATE_LIMITED` | [ ] | |
+| 5e.6 | Trong khi 5e.5, user khác chuyển khoản bình thường | Vẫn `201` (đếm theo user, không vạ lây) | [ ] | |
+| 5e.7 | Đăng nhập đúng giữa chuỗi sai (chưa đủ 5 lần) rồi sai tiếp 4 lần nữa, đăng nhập đúng | Vẫn vào được — thành công giữa chừng đưa bộ đếm về 0 | [ ] | |
+| 5e.8 | `docker compose exec db psql -U bank -d banking -c "UPDATE login_attempts SET success = true WHERE email_norm = '...';"` bằng user `bank` | Sửa được (owner), còn bằng `bank_app` thì lỗi `permission denied` | [ ] | |
+
 ## 6. Toàn vẹn dữ liệu và kỹ thuật
 
 Chạy bằng `docker compose exec db psql -U bank -d banking -c "<câu SQL>"`.

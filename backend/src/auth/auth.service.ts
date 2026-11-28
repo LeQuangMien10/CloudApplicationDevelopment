@@ -5,6 +5,7 @@ import { DataSource } from 'typeorm';
 import { AccountsService } from '../accounts/accounts.service.js';
 import { AuditAction } from '../audit/entities/audit-log.entity.js';
 import { AuditService } from '../audit/audit.service.js';
+import { getRequestContext } from '../common/request-context.js';
 import { isUniqueViolation } from '../common/db-errors.js';
 import { AppException } from '../common/exceptions/app.exception.js';
 import { User, UserStatus } from '../users/entities/user.entity.js';
@@ -15,6 +16,11 @@ import {
   RegisterDto,
   RegisterResponseDto,
 } from './dto/auth.dto.js';
+import {
+  LOCKOUT_THRESHOLD,
+  LOCKOUT_WINDOW_MINUTES,
+  LoginAttemptsService,
+} from './login-attempts.service.js';
 
 const BCRYPT_COST = 12;
 
@@ -40,6 +46,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly auditService: AuditService,
+    private readonly loginAttempts: LoginAttemptsService,
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {
@@ -89,7 +96,38 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<LoginResponseDto> {
-    const user = await this.usersService.findByEmailWithPassword(dto.email);
+    const emailNorm = dto.email.toLowerCase();
+    const ip = getRequestContext()?.ip ?? null;
+
+    // Khóa đăng nhập (F9) kiểm tra TRƯỚC bcrypt: người đoán mật khẩu không được
+    // tiêu tốn thêm bcrypt CPU của hệ thống khi đã vượt ngưỡng
+    const { count, oldestFailureAt } =
+      await this.loginAttempts.recentFailures(emailNorm);
+    if (count >= LOCKOUT_THRESHOLD) {
+      const windowMs = LOCKOUT_WINDOW_MINUTES * 60_000;
+      const retryAfter = oldestFailureAt
+        ? Math.max(
+            1,
+            Math.ceil((oldestFailureAt.getTime() + windowMs - Date.now()) / 1000),
+          )
+        : LOCKOUT_WINDOW_MINUTES * 60;
+      await this.auditService.logStandalone({
+        actorId: null,
+        actorRole: null,
+        action: AuditAction.AUTH_LOGIN_LOCKED,
+        targetType: 'user',
+        targetId: null,
+        metadata: { email: emailNorm, retryAfter },
+      });
+      throw new AppException(
+        'LOGIN_TEMPORARILY_LOCKED',
+        'Đăng nhập tạm khóa do sai mật khẩu nhiều lần, thử lại sau',
+        HttpStatus.LOCKED,
+        { retryAfter },
+      );
+    }
+
+    const user = await this.usersService.findByEmailWithPassword(emailNorm);
 
     // Luôn chạy bcrypt.compare (kể cả khi email không tồn tại) để thời gian
     // phản hồi đồng nhất; sai email hoặc sai mật khẩu -> cùng một thông báo
@@ -98,6 +136,7 @@ export class AuthService {
       user?.passwordHash ?? DUMMY_HASH,
     );
     if (!user || !passwordOk) {
+      await this.loginAttempts.record(emailNorm, ip, false);
       // actorId null khi email không tồn tại; không bao giờ ghi mật khẩu vào metadata
       await this.auditService.logStandalone({
         actorId: user?.id ?? null,
@@ -105,7 +144,7 @@ export class AuthService {
         action: AuditAction.AUTH_LOGIN_FAILED,
         targetType: 'user',
         targetId: user?.id ?? null,
-        metadata: { email: dto.email, reason: 'invalid_credentials' },
+        metadata: { email: emailNorm, reason: 'invalid_credentials' },
       });
       throw new AppException(
         'INVALID_CREDENTIALS',
@@ -114,7 +153,8 @@ export class AuthService {
       );
     }
 
-    // So khớp mật khẩu TRƯỚC, khóa SAU: chỉ người biết đúng mật khẩu mới thấy tài khoản bị khóa
+    // So khớp mật khẩu TRƯỚC, khóa SAU: chỉ người biết đúng mật khẩu mới thấy tài khoản bị khóa.
+    // Người này biết mật khẩu thật, không phải đoán — không ghi vào login_attempts.
     if (user.status !== UserStatus.ACTIVE) {
       await this.auditService.logStandalone({
         actorId: user.id,
@@ -122,7 +162,7 @@ export class AuthService {
         action: AuditAction.AUTH_LOGIN_FAILED,
         targetType: 'user',
         targetId: user.id,
-        metadata: { email: dto.email, reason: 'user_locked' },
+        metadata: { email: emailNorm, reason: 'user_locked' },
       });
       throw new AppException(
         'USER_LOCKED',
@@ -140,6 +180,8 @@ export class AuthService {
       iat: number;
     };
 
+    // Đăng nhập thành công đưa bộ đếm về 0: các dòng fail cũ bị bỏ qua khi đếm
+    await this.loginAttempts.record(emailNorm, ip, true);
     await this.auditService.logStandalone({
       actorId: user.id,
       actorRole: user.role,

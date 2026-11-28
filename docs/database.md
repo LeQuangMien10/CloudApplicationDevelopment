@@ -1,6 +1,6 @@
 # Database (Phase 1)
 
-PostgreSQL 16. Schema tạo bởi các migration trong `backend/src/database/migrations/`: `InitSchema` tạo bảng, `EnforceTransferLedgerIntegrity` và `RestrictLedgerMutation` thêm trigger và phân quyền bảo vệ sổ cái, `AddOperatorAuditorRoles` thêm vai trò operator, auditor (F1 Phase 2), `CreateAuditLogs` tạo bảng audit log (F2), `CreateOutboxEvents` tạo hàng đợi sự kiện cho worker (F5).
+PostgreSQL 16. Schema tạo bởi các migration trong `backend/src/database/migrations/`: `InitSchema` tạo bảng, `EnforceTransferLedgerIntegrity` và `RestrictLedgerMutation` thêm trigger và phân quyền bảo vệ sổ cái, `AddOperatorAuditorRoles` thêm vai trò operator, auditor (F1 Phase 2), `CreateAuditLogs` tạo bảng audit log (F2), `CreateOutboxEvents` tạo hàng đợi sự kiện cho worker (F5), `CreateReconciliationReports` tạo bảng báo cáo đối soát (F7), `CreateLoginAttempts` tạo bảng đếm lần đăng nhập sai (F9).
 
 ```mermaid
 erDiagram
@@ -11,6 +11,7 @@ erDiagram
   accounts ||--o{ ledger_entries : ""
   users ||--o{ idempotency_keys : ""
   transactions |o--o| idempotency_keys : ""
+  users ||..o{ login_attempts : "theo email đã chuẩn hóa"
 ```
 
 ## Các bảng
@@ -25,6 +26,7 @@ erDiagram
 | `audit_logs` | id, actor_id, actor_role, action, target_type, target_id, request_id, ip, metadata (jsonb), created_at | Nhật ký kiểm toán (F2). **Chỉ thêm dòng**, xem chi tiết bên dưới |
 | `outbox_events` | id, event_type, payload (jsonb), status, attempts, available_at, last_error, created_at, processed_at | Hàng đợi sự kiện cho worker (F5). status: pending, done, failed. Xem chi tiết bên dưới |
 | `reconciliation_reports` | id, trigger, triggered_by, status, accounts_checked, mismatched_accounts, total_balance, transactions_checked, invalid_transactions, details (jsonb), duration_ms, run_at | Kết quả đối soát (F7). App chỉ có `SELECT`, `INSERT`, xem chi tiết bên dưới |
+| `login_attempts` | id, email_norm, ip, success, created_at | Bằng chứng các lần thử đăng nhập để khóa đăng nhập sai nhiều lần (F9). **Chỉ thêm dòng** bằng quyền: `banking_app` chỉ có `SELECT, INSERT`, không cần trigger. Index `(email_norm, created_at DESC)`. Không có FK tới users để vẫn ghi được cả email không tồn tại |
 
 ## Quy tắc quan trọng
 
@@ -46,6 +48,11 @@ erDiagram
   - Trigger chặn `UPDATE`, `DELETE`, `TRUNCATE` trên `ledger_entries`.
   - Trigger kiểm tra lúc commit: giao dịch transfer `completed` phải có đúng 1 dòng debit, 1 dòng credit, đúng số tiền và đúng tài khoản. Sai thì cả transaction bị hủy.
 - **Khóa tài khoản ngân hàng (TV2, F3):** operator khóa (`frozen`) khi nghi ngờ gian lận — user vẫn đăng nhập, xem số dư được, nhưng không chuyển đi và không nhận tiền (transfer chặn sẵn mọi trạng thái khác `active`). Chỉ nhận `frozen`/`active` qua API, tài khoản quỹ `000000000000` không đổi được, tài khoản đã `closed` là trạng thái cuối (`ACCOUNT_CLOSED`), `reason` bắt buộc khi khóa, và mọi thao tác ghi audit log trong cùng DB transaction. Trạng thái đọc với khóa dòng `pessimistic_write` nên hai operator đổi cùng lúc không sinh log trùng.
+- **Khóa đăng nhập sai nhiều lần (TV2, F9):**
+  - Mỗi lần thử đăng nhập ghi 1 dòng `login_attempts` (`success` đúng/sai). Sai mật khẩu đủ **5 lần liên tiếp sau lần thành công gần nhất, trong cửa sổ 15 phút** → đăng nhập bị chặn (`423 LOGIN_TEMPORARILY_LOCKED`) cho đến khi lần sai cũ nhất rời khỏi cửa sổ.
+  - Đếm bằng truy vấn có điều kiện `created_at > max(created_at) WHERE success = true` — đăng nhập thành công giữa chừng đưa bộ đếm về 0 mà không cần xóa dòng cũ, nên không cần job dọn.
+  - Người biết đúng mật khẩu nhưng bị khóa user (`USER_LOCKED`) không ghi dòng nào vào `login_attempts` — không phải lần đoán.
+  - Mọi lần chặn ghi audit log `auth_login_locked`; kiểm tra khóa chạy **trước** bcrypt để kẻ đoán mật khẩu không tiêu tốn CPU bcrypt của hệ thống.
 - **Audit log chỉ thêm dòng (TV2, F2):**
   - `banking_app` chỉ có `SELECT`, `INSERT` trên `audit_logs`; `PUBLIC` bị `REVOKE ALL`.
   - Trigger chặn `UPDATE`, `DELETE`, `TRUNCATE` kể cả với owner, trừ khi thành viên role `audit_maintainer` bật `app.audit_maintenance` trong transaction.
@@ -96,7 +103,7 @@ Người phụ trách được chỉnh khi làm và cập nhật mục này tron
 |---|---|---|---|
 | Enum `user_role` | **Xong tuần 7:** có `customer`, `operator`, `auditor`, `admin` | TV2 | 7 |
 | Bảng `audit_logs` | **Xong tuần 7:** xem mục "Audit log chỉ thêm dòng" ở trên | TV2 | 7 |
-| `users` | Thêm cột đếm số lần đăng nhập sai, thời điểm hết tạm khóa | TV2 | 9 |
+| Bảng `login_attempts` | **Xong tuần 9:** thay cho thêm cột trên `users` — bảng riêng append-only bằng GRANT, xem mục "Khóa đăng nhập sai nhiều lần" ở trên | TV2 | 9 |
 | `transactions` | **Xong tuần 7:** dùng trạng thái `failed` kèm `failure_reason`, không cần migration. Xem quy tắc "Giao dịch failed" ở trên | TV3 | 7 |
 | Bảng `outbox_events` | **Xong tuần 8 (phần ghi sự kiện):** thêm cột `last_error`, xem mục "Outbox" ở trên. Worker đọc sự kiện làm ở PR sau | TV3 | 8 |
 | Bảng `fraud_flags` | id, transaction_id, rule_code, score, status (open, confirmed, dismissed), reviewed_by, reviewed_at, note, created_at | TV3 | 8 |
