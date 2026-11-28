@@ -1,3 +1,6 @@
+/** Token inject OutboxWorkerConfig. Test thay bằng overrideProvider(...).useValue(...). */
+export const OUTBOX_WORKER_CONFIG = 'OUTBOX_WORKER_CONFIG';
+
 /** Cấu hình worker xử lý outbox (F5). Đọc từ biến môi trường, xem .env.example. */
 export interface OutboxWorkerConfig {
   /** Thời gian nghỉ giữa hai lần poll khi không còn sự kiện đến hạn */
