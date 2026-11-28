@@ -7,18 +7,13 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import type { StringValue } from 'ms';
 import { AccountsModule } from '../accounts/accounts.module.js';
 import { AuditModule } from '../audit/audit.module.js';
+import { parsePositiveInt } from '../common/throttling/env-limits.js';
 import { UsersModule } from '../users/users.module.js';
 import { LoginAttempt } from './entities/login-attempt.entity.js';
 import { LoginAttemptsService } from './login-attempts.service.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { JwtStrategy } from './jwt.strategy.js';
-
-/** Env rỗng hoặc không phải số dương thì dùng mặc định. */
-export function parsePositiveInt(raw: string | undefined, fallback: number) {
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
 
 @Module({
   imports: [

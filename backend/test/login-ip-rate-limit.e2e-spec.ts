@@ -72,4 +72,29 @@ describe('Rate limit đăng nhập theo IP (F9, e2e)', () => {
       });
     expect(otherClient.status).toBe(401);
   });
+
+  it('đi qua Caddy rồi nginx: hai client khác nhau có chung IP proxy cuối vẫn tách bucket', async () => {
+    // Trên server, X-Forwarded-For tới backend có dạng "<IP client>, <IP của Caddy>".
+    // Nếu chỉ tin 1 lớp proxy, req.ip là IP của Caddy và mọi người dùng chung một bucket.
+    const caddyIp = '172.18.0.5';
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', `203.0.113.20, ${caddyIp}`)
+        .send({
+          email: `f9-hops-a-${Date.now()}-${i}@example.com`,
+          password: 'SaiMatKhau@1',
+        });
+      expect(res.status).toBe(401);
+    }
+
+    const otherClient = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', `198.51.100.20, ${caddyIp}`)
+      .send({
+        email: `f9-hops-b-${Date.now()}@example.com`,
+        password: 'SaiMatKhau@1',
+      });
+    expect(otherClient.status).toBe(401);
+  });
 });

@@ -15,6 +15,6 @@ GitHub Actions chạy khi có PR vào `main` và khi push `main`: lint, unit tes
 | Vấn đề | Hướng xử lý |
 |---|---|
 | Container backend giữ credential owner vì phải tự chạy migration | Tách bước migration khỏi container, tuần 9 |
-| Sau proxy, `req.ip` là IP của proxy nên audit log ghi sai IP | Bật `trust proxy` khi deploy |
+| Sau proxy, `req.ip` là IP của proxy nên audit log ghi sai IP, rate limit theo IP gộp mọi người làm một | Đã bật `trust proxy` 2 lớp (Caddy, nginx) trong `app.setup.ts`, chỉnh bằng `TRUST_PROXY_HOPS` |
 | CI không chạy khi đổi base PR hoặc chuyển draft sang ready | Thêm `types` và `workflow_dispatch` vào `ci.yml` |
 | Một máy là điểm lỗi duy nhất | Chấp nhận ở giai đoạn này, xem ADR 006 |

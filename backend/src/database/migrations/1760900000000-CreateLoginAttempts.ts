@@ -6,8 +6,8 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
  * chỉ có SELECT, INSERT (không cần trigger như audit_logs vì không cấp
  * UPDATE/DELETE ngay từ đầu). Đếm luôn giới hạn 15 phút qua, không cần job dọn.
  */
-export class CreateLoginAttempts1760700000000 implements MigrationInterface {
-  name = 'CreateLoginAttempts1760700000000';
+export class CreateLoginAttempts1760900000000 implements MigrationInterface {
+  name = 'CreateLoginAttempts1760900000000';
 
   public async up(q: QueryRunner): Promise<void> {
     await q.query(`
