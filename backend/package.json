@@ -26,7 +26,9 @@
     "migration:generate": "npm run build && typeorm migration:generate -d dist/database/data-source.js",
     "seed": "npm run build && node dist/database/seed.js",
     "db:reset": "npm run build && npm run typeorm -- schema:drop && npm run typeorm -- migration:run && node dist/database/create-app-user.js && node dist/database/seed.js",
-    "db:app-user": "npm run build && node dist/database/create-app-user.js"
+    "db:app-user": "npm run build && node dist/database/create-app-user.js",
+    "reconcile": "npm run build && node dist/reconciliation/run-reconciliation.js",
+    "resolve-stuck": "npm run build && node dist/reconciliation/resolve-stuck-transactions.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
