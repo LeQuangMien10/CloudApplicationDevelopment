@@ -100,6 +100,20 @@ Tài khoản mẫu: `an@example.com`, `binh@example.com`, `chi@example.com` (m�
 | 5c.8 | Auditor xem audit log sau khi khóa/mở | Có `account_frozen` và `account_unfrozen` kèm `reason` | [ ] | |
 | 5c.9 | Đặt `status='closed'` bằng SQL cho một tài khoản, rồi khóa và mở bằng API | Đều `422 ACCOUNT_CLOSED`, không có log mới | [ ] | |
 
+## 5d. Operator, Auditor tra cứu tài khoản theo số tài khoản (Issue #11, làm bằng Swagger)
+
+| # | Thao tác | Kết quả mong đợi | Đạt | Ghi chú |
+|---|---|---|---|---|
+| 5d.1 | Operator `GET /api/operator/accounts?accountNumber=<số tài khoản của An>` | `200`, có `id`, `fullName`, `status`, `balance`, `currency`, `isSystem: false` | [ ] | |
+| 5d.2 | Auditor gọi như 5d.1 | `200` nhưng **không có** `balance`, `currency` | [ ] | |
+| 5d.3 | Admin gọi như 5d.1 | `200`, đủ trường như operator | [ ] | |
+| 5d.4 | Customer gọi API này | `403 FORBIDDEN` | [ ] | |
+| 5d.5 | Gọi không có token | `401` | [ ] | |
+| 5d.6 | Tra cứu số không tồn tại `999999999999` | `404 ACCOUNT_NOT_FOUND` | [ ] | |
+| 5d.7 | Tra cứu số 11 chữ số, số có chữ cái, thiếu tham số | Đều `400 VALIDATION_ERROR` | [ ] | |
+| 5d.8 | Tra cứu tài khoản quỹ `000000000000` | `200` với `isSystem: true` (khác tra cứu khách hàng trả 404) | [ ] | |
+| 5d.9 | Lấy `id` từ 5d.1 rồi gọi `PATCH /api/operator/accounts/:id/status` | Khóa/mở thành công (kết nối 2 API ở màn hình Operator) | [ ] | |
+
 ## 6. Toàn vẹn dữ liệu và kỹ thuật
 
 Chạy bằng `docker compose exec db psql -U bank -d banking -c "<câu SQL>"`.

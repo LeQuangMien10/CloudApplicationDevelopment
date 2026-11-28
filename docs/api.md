@@ -26,6 +26,7 @@ Thiết kế dự kiến để các thành viên làm thống nhất. Người p
 |---|---|---|---|---|---|---|
 | GET | `/api/audit-logs?actorId=&action=&from=&to=&requestId=&page=&limit=` | Auditor, Admin | Tra cứu audit log (F2) | TV2 | 7 | **Xong** |
 | PATCH | `/api/operator/accounts/:id/status` | Operator, Admin | Khóa, mở tài khoản ngân hàng, body `{ status: "frozen" \| "active", reason }` (F3) | TV2 | 7 | **Xong** |
+| GET | `/api/operator/accounts?accountNumber=` | Operator, Auditor, Admin | Tra cứu tài khoản theo số tài khoản, trả `id` để gọi API khóa/mở (Issue #11) | TV2 | 8 | **Xong** |
 | GET | `/api/operator/fraud-flags?status=&page=&limit=` | Operator, Auditor, Admin | Danh sách cảnh báo bất thường (F6) | TV3 | 8 | Chưa |
 | PATCH | `/api/operator/fraud-flags/:id` | Operator, Admin | Xử lý cảnh báo, body `{ status: "confirmed" \| "dismissed", note }` (F6) | TV3 | 8 | Chưa |
 | GET | `/api/reconciliation/reports?status=&page=&limit=` | Auditor, Admin | Danh sách báo cáo đối soát (F7) | TV1 | 8 | **Xong** |
@@ -181,6 +182,12 @@ Mật khẩu ít nhất 8 ký tự, có cả chữ và số. Email được chuy
 
 ```json
 [ { "id": "<uuid>", "accountNumber": "100000000001", "balance": "10000000.00", "currency": "VND", "status": "active" } ]
+```
+
+**`GET /api/operator/accounts?accountNumber=100000000001`** → `200` (Issue #11). Dành cho staff, dùng ở màn hình Operator để lấy `id` rồi gọi API khóa/mở phía trên. `accountNumber` phải gồm đúng 12 chữ số (`400 VALIDATION_ERROR`), không tồn tại thì `404 ACCOUNT_NOT_FOUND`. Tài khoản quỹ vẫn trả về kèm `isSystem: true` (tra cứu của khách hàng `GET /api/accounts/lookup/:accountNumber` thì trả 404 với tài khoản quỹ). **Auditor không nhận `balance`, `currency`** (ma trận phân quyền không giao auditor xem số dư).
+
+```json
+{ "id": "<uuid>", "accountNumber": "100000000001", "fullName": "Nguyễn Văn An", "status": "active", "isSystem": false, "balance": "10000000.00", "currency": "VND" }
 ```
 
 **`PATCH /api/operator/accounts/:id/status`** → `200` (F3). Operator khóa tài khoản khi nghi ngờ gian lận: user vẫn đăng nhập và xem số dư, nhưng tài khoản không chuyển đi và không nhận tiền được (`422 SENDER/TARGET_ACCOUNT_NOT_ACTIVE`). `reason` bắt buộc khi `status = "frozen"`. Tài khoản quỹ `000000000000` không đổi được; tài khoản đã `closed` là trạng thái cuối (`422 ACCOUNT_CLOSED`). Gọi đúng trạng thái hiện có vẫn `200`, không ghi log trùng.
