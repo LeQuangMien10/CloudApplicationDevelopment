@@ -100,7 +100,7 @@ Tài khoản mẫu: `an@example.com`, `binh@example.com`, `chi@example.com` (m�
 | 5c.8 | Auditor xem audit log sau khi khóa/mở | Có `account_frozen` và `account_unfrozen` kèm `reason` | [ ] | |
 | 5c.9 | Đặt `status='closed'` bằng SQL cho một tài khoản, rồi khóa và mở bằng API | Đều `422 ACCOUNT_CLOSED`, không có log mới | [ ] | |
 
-## 5d. Operator, Auditor tra cứu tài khoản theo số tài khoản (Issue #11 — làm bằng Swagger)
+## 5d. Operator, Auditor tra cứu tài khoản theo số tài khoản (Issue #11, làm bằng Swagger)
 
 | # | Thao tác | Kết quả mong đợi | Đạt | Ghi chú |
 |---|---|---|---|---|

@@ -5,6 +5,7 @@ import { AuditAction } from '../audit/entities/audit-log.entity.js';
 import { AuditService } from '../audit/audit.service.js';
 import { AppException } from '../common/exceptions/app.exception.js';
 import { DEFAULT_CURRENCY } from '../common/money.js';
+import { UserRole } from '../users/entities/user.entity.js';
 import { generateAccountNumber } from './account-number.util.js';
 import { Account, AccountStatus } from './entities/account.entity.js';
 
@@ -193,9 +194,9 @@ export class AccountsService {
    * Issue #11: tra cứu tài khoản theo số tài khoản cho Operator/Auditor/Admin,
    * dùng ở màn hình Operator để lấy id gọi API khóa/mở. Khác endpoint tra cứu
    * của khách hàng: staff thấy cả id, tài khoản quỹ (cờ isSystem) và số dư
-   * (trừ auditor — ma trận phân quyền không giao auditor xem số dư).
+   * (trừ auditor, vì ma trận phân quyền không giao auditor xem số dư).
    */
-  async findByAccountNumberForStaff(accountNumber: string, role: string) {
+  async findByAccountNumberForStaff(accountNumber: string, role: UserRole) {
     const account = await this.accountsRepository.findOne({
       select: {
         id: true,
@@ -233,7 +234,7 @@ export class AccountsService {
       status: account.status,
       isSystem: account.isSystem,
     };
-    if (role !== 'auditor') {
+    if (role !== UserRole.AUDITOR) {
       response.balance = account.balance;
       response.currency = account.currency;
     }

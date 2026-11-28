@@ -184,7 +184,7 @@ Mật khẩu ít nhất 8 ký tự, có cả chữ và số. Email được chuy
 [ { "id": "<uuid>", "accountNumber": "100000000001", "balance": "10000000.00", "currency": "VND", "status": "active" } ]
 ```
 
-**`GET /api/operator/accounts?accountNumber=100000000001`** → `200` (Issue #11). Dành cho staff, dùng ở màn hình Operator để lấy `id` rồi gọi API khóa/mở phía trên. `accountNumber` phải gồm đúng 12 chữ số (`400 VALIDATION_ERROR`), không tồn tại thì `404 ACCOUNT_NOT_FOUND`. Tài khoản quỹ vẫn trả về kèm `isSystem: true` (khác tra cứu khách hàng `GET /api/accounts/lookup/:accountNumber` — tại đó quỹ trả 404). **Auditor không nhận `balance`, `currency`** (ma trận phân quyền không giao auditor xem số dư).
+**`GET /api/operator/accounts?accountNumber=100000000001`** → `200` (Issue #11). Dành cho staff, dùng ở màn hình Operator để lấy `id` rồi gọi API khóa/mở phía trên. `accountNumber` phải gồm đúng 12 chữ số (`400 VALIDATION_ERROR`), không tồn tại thì `404 ACCOUNT_NOT_FOUND`. Tài khoản quỹ vẫn trả về kèm `isSystem: true` (tra cứu của khách hàng `GET /api/accounts/lookup/:accountNumber` thì trả 404 với tài khoản quỹ). **Auditor không nhận `balance`, `currency`** (ma trận phân quyền không giao auditor xem số dư).
 
 ```json
 { "id": "<uuid>", "accountNumber": "100000000001", "fullName": "Nguyễn Văn An", "status": "active", "isSystem": false, "balance": "10000000.00", "currency": "VND" }

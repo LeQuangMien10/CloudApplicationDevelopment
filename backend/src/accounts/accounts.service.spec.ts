@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { AppException } from '../common/exceptions/app.exception.js';
 import { AccountsService } from './accounts.service.js';
 import { Account, AccountStatus } from './entities/account.entity.js';
+import { UserRole } from '../users/entities/user.entity.js';
 
 describe('AccountsService.updateStatus (F3)', () => {
   const manager = {
@@ -194,7 +195,7 @@ describe('AccountsService.findByAccountNumberForStaff (Issue #11)', () => {
   });
 
   it('operator nhận đủ id, fullName, status, balance; tìm theo accountNumber', async () => {
-    const res = await service.findByAccountNumberForStaff('100000000009', 'operator');
+    const res = await service.findByAccountNumberForStaff('100000000009', UserRole.OPERATOR);
 
     expect(accountsRepository.findOne).toHaveBeenCalledWith(
       expect.objectContaining({ where: { accountNumber: '100000000009' } }),
@@ -211,7 +212,7 @@ describe('AccountsService.findByAccountNumberForStaff (Issue #11)', () => {
   });
 
   it('auditor không nhận balance', async () => {
-    const res = await service.findByAccountNumberForStaff('100000000009', 'auditor');
+    const res = await service.findByAccountNumberForStaff('100000000009', UserRole.AUDITOR);
 
     expect(res).toHaveProperty('id', 'acc-9');
     expect(res).not.toHaveProperty('balance');
@@ -222,7 +223,7 @@ describe('AccountsService.findByAccountNumberForStaff (Issue #11)', () => {
     accountsRepository.findOne.mockResolvedValue(null);
 
     const err = await service
-      .findByAccountNumberForStaff('999999999999', 'operator')
+      .findByAccountNumberForStaff('999999999999', UserRole.OPERATOR)
       .then(
         () => null,
         (e) => e,
@@ -244,7 +245,7 @@ describe('AccountsService.findByAccountNumberForStaff (Issue #11)', () => {
       user: { id: 'user-9', fullName: 'Quỹ ngân hàng' },
     } as unknown as Account);
 
-    const res = await service.findByAccountNumberForStaff('000000000000', 'operator');
+    const res = await service.findByAccountNumberForStaff('000000000000', UserRole.OPERATOR);
 
     expect(res.isSystem).toBe(true);
   });
