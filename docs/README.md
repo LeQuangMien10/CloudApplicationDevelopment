@@ -33,6 +33,7 @@ Mỗi thư mục phase có `spec.md` (cần làm gì), `design.md` (thiết kế
 | [adr/](adr/README.md) | Vì sao chọn cách này | 001 đến 005 đã có, 006 và 007 bản nháp |
 | [api.md](api.md), [database.md](database.md) | API và dữ liệu | Đã có |
 | [sequence đăng nhập](sequence-dang-nhap.md), [sequence chuyển khoản](sequence-chuyen-tien.md), [sequence đối soát](sequence-doi-soat.md) | Luồng xử lý từng bước | Đã có |
+| [threat-model.md](threat-model.md) | Rủi ro bảo mật chính, biện pháp và bằng chứng | Đã có |
 | [Claude.md](Claude.md), [Agent.md](Agent.md) | AI làm việc trong repo thế nào | Đã có |
 | [phase0/](phase0/spec.md), [phase1/](phase1/spec.md) | Đã làm gì, ra sao | Tổng kết lại |
 | [phase2/](phase2/spec.md), [phase-cloud/](phase-cloud/spec.md) | Sắp làm gì | Đang làm |
